@@ -1,5 +1,7 @@
 import torch
 from torch.utils.data import DataLoader, Dataset, RandomSampler
+from utils import read_raw_file
+
 TURN_TOKEN = "[SEPT]"
 
 
@@ -8,14 +10,13 @@ class NSPDataset(Dataset):
         self.max_seq_len = max_seq_len
         self.tokenizer = tokenizer
         self.num_neg = num_neg
-        raw_data = self.read_dataset(fname)
-        self.feature = self._make_feature(raw_data)
+        self.raw_data = self.read_dataset(fname)
+        self.feature = self._make_feature(self.raw_data)
 
     def read_dataset(self, fname):
-        with open(fname, "r") as f:
-            ls = [el.strip().split("|||") for el in f.readlines()]
-        assert all([len(el) == self.num_neg + 2 for el in ls])
-        return ls
+        raw = read_raw_file(fname)
+        assert all([len(el) == self.num_neg + 2 for el in raw])
+        return raw
 
     def __len__(self):
         return len(self.feature[0])

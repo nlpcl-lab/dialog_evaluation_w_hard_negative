@@ -84,3 +84,9 @@ def get_logger() -> logging.Logger:
     logger.addHandler(ch)
     logger.info("Logger Generated")
     return logger
+
+
+def read_raw_file(fname: str):
+    with open(fname, "r") as f:
+        ls = [el.strip().split("|||") for el in f.readlines()]
+    return ls
