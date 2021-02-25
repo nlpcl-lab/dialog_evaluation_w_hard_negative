@@ -3,18 +3,196 @@ Experimental code to attack the golden resposne with BERT-retrieval model
 """
 import argparse
 import os
+import numpy as np
 from functools import partial
-
+from tqdm import tqdm
+import json
 import torch
 from tqdm import tqdm
-from transformers import (BertConfig, BertForNextSentencePrediction,
-                          BertTokenizer)
+from transformers import (
+    BertConfig,
+    BertForNextSentencePrediction,
+    BertTokenizer,
+    BertForMaskedLM,
+)
 
 from datasets import TURN_TOKEN, EvalDataset, NSPDataset
 from utils import get_logger, read_raw_file, set_random_seed
 
+NUM_TOPK_PREDICTION = 1
+MAX_CHANGE_RATIO = 1.0
+STOP_NSP_THRESHOLD = 0.5
+SCORE_DIFF = 0.01
 
-def main():
+
+def attack():
+    logger = get_logger()
+    set_random_seed()
+    device = torch.device("cuda")
+
+    """
+    Load Model
+    """
+    tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+    special_tokens_dict = {"additional_special_tokens": ["[SEPT]"]}
+    tokenizer.add_special_tokens(special_tokens_dict)
+    modelconfig = BertConfig.from_pretrained("bert-base-uncased")
+    model = BertForNextSentencePrediction(modelconfig)
+    model.resize_token_embeddings(len(tokenizer))
+    model.load_state_dict(torch.load("./logs/rand_neg1/model/epoch-0.pth"))
+    model.eval()
+    model.to(device)
+
+    bert_mlm_config = BertConfig.from_pretrained("bert-base-uncased")
+    bert_mlm = BertForMaskedLM(bert_mlm_config)
+    bert_mlm.load_state_dict(
+        torch.load("./logs/ft_bert/model/epoch-0.pth"), strict=False
+    )
+    bert_mlm.to(device)
+
+    """
+    Load Dataset
+    """
+    train_raw, valid_raw = (
+        read_raw_file("./data/negative/random_neg1_train.txt"),
+        read_raw_file("./data/negative/random_neg1_valid.txt"),
+    )
+    os.makedirs("attack", exist_ok=True)
+    softmax = torch.nn.Softmax()
+    for dataset_index, dataset in enumerate([valid_raw, train_raw]):
+        load_fname = (
+            "vurnerable/train" if dataset_index == 1 else "vurnerable/valid"
+        )
+        with open(load_fname, "r") as f:
+            score_data = [json.loads(el) for el in f.readlines()]
+        assert len(score_data) == len(dataset)
+
+        result = []
+        for idx, item in enumerate(tqdm(score_data)):
+            if "vurnerable_nsp" not in item:
+                result.append("[NONE]")
+                continue
+            (
+                context,
+                response,
+                tokenized_response,
+                original_score,
+                vurnerable_score,
+            ) = (
+                item["context"],
+                item["response"],
+                item["tokenized_response"],
+                item["original_nsp"],
+                item["vurnerable_nsp"],
+            )
+            if original_score < 0.8:
+                result.append("[NONE]")
+                continue
+            original_encoded = tokenizer(
+                context,
+                text_pair=response,
+                max_length=128,
+                padding="max_length",
+                truncation=True,
+                return_tensors="pt",
+            )
+
+            response_length = int(sum(original_encoded["token_type_ids"][0]))
+            assert response_length == len(tokenized_response) + 1
+            context_length = (
+                int(sum(original_encoded["attention_mask"][0]))
+                - response_length
+            )
+            if response_length <= 6:
+                result.append("[NONE]")
+                continue
+
+            original_score = get_nsp_score(original_encoded, model, device)
+            # Double check the consistency of the score
+            if original_score < 0.8:
+                raise ValueError
+
+            input_ids = original_encoded["input_ids"]
+            assert len(vurnerable_score) == len(tokenized_response)
+            score_diff_list = [el - original_score for el in vurnerable_score]
+            sorted_score_diff_list = sorted(
+                range(len(score_diff_list)), key=lambda k: score_diff_list[k]
+            )
+            attacked_response = tokenized_response[:]
+            lowest_token, lowest_score = None, 100
+
+            for changed_num, token_index in enumerate(sorted_score_diff_list):
+                if score_diff_list[token_index] > -SCORE_DIFF:
+                    break
+                if (
+                    changed_num / len(sorted_score_diff_list)
+                    > MAX_CHANGE_RATIO
+                ):
+                    break
+
+                original_token_id = tokenizer._convert_token_to_id(
+                    attacked_response[token_index]
+                )
+
+                attacked_response[token_index] = tokenizer.mask_token
+
+                model_input = torch.tensor(
+                    [
+                        tokenizer.convert_tokens_to_ids(
+                            [tokenizer.cls_token]
+                            + attacked_response
+                            + [tokenizer.sep_token]
+                        )
+                    ]
+                ).to(device)
+                with torch.no_grad():
+                    output = bert_mlm(model_input)[0]
+
+                score_in_response = (
+                    softmax(output[0][token_index + 1]).cpu().detach()
+                )
+                score_in_response[original_token_id] = 0.0
+                sorted_idx = torch.argsort(
+                    score_in_response, descending=True
+                )[:NUM_TOPK_PREDICTION]
+                lowest_token, lowest_score = None, 100
+
+                for likely_token in sorted_idx:
+                    input_ids[0, context_length + token_index] = likely_token
+                    original_encoded["input_ids"] = input_ids
+                    nsp_score = get_nsp_score(original_encoded, model, device)
+                    if lowest_score > nsp_score:
+                        lowest_score = nsp_score
+                        lowest_token = likely_token
+
+                input_ids[0, context_length + token_index] = lowest_token
+                attacked_response[
+                    token_index
+                ] = tokenizer.convert_ids_to_tokens([lowest_token])[0]
+                # if lowest_score < STOP_NSP_THRESHOLD:
+                #    break
+            if lowest_score >= STOP_NSP_THRESHOLD:
+                result.append("[NONE]")
+                continue
+            result.append(" ".join(attacked_response).replace(" ##", ""))
+            assert "##" not in result
+
+        assert len(dataset) == len(result)
+        fname_suffix = f"_k{NUM_TOPK_PREDICTION}_maxchange{MAX_CHANGE_RATIO}_nspoveronly{STOP_NSP_THRESHOLD}_scorediff{SCORE_DIFF}.txt"
+        with open(
+            "attack/"
+            + "neg2_"
+            + ["valid", "train"][dataset_index]
+            + fname_suffix,
+            "w",
+        ) as f:
+            for line_idx, line in enumerate(result):
+                f.write("|||".join(dataset[line_idx] + [result[line_idx]]))
+                if line_idx != len(result) - 1:
+                    f.write("\n")
+
+
+def scoring():
     logger = get_logger()
     set_random_seed()
     device = torch.device("cuda")
@@ -40,18 +218,107 @@ def main():
         read_raw_file("./data/negative/random_neg1_valid.txt"),
     )
 
-    for conversation in valid_raw:
-        context, response, _ = conversation
-        original_encoded = tokenizer(
-            context,
-            text_pair=response,
-            max_length=128,
-            padding="max_length",
-            truncation=True,
-            return_tensors="pt",
-        )
-        original_score = get_nsp_score(original_encoded, model, device)
-        print(original_score)
+    os.makedirs("vurnerable", exist_ok=True)
+    for dataset_index, dataset in enumerate([valid_raw, train_raw]):
+        result = []
+        for conv_idx, conversation in enumerate(tqdm(dataset)):
+            context, response, _ = conversation
+            original_encoded = tokenizer(
+                context,
+                text_pair=response,
+                max_length=128,
+                padding="max_length",
+                truncation=True,
+                return_tensors="pt",
+            )
+            tokenized_response = tokenizer.tokenize(response)
+            original_score = get_nsp_score(original_encoded, model, device)
+
+            """
+            EXP1: response 한 토큰씩 masking해서 NSP Score 변화 보기
+            """
+            response_length = int(sum(original_encoded["token_type_ids"][0]))
+            try:
+                assert response_length == len(tokenized_response) + 1
+            except:
+                assert int(sum(original_encoded["attention_mask"][0])) == 128
+                item = {
+                    "context": context,
+                    "response": response,
+                    "tokenized_response": tokenized_response,
+                    "original_nsp": original_score,
+                }
+                result.append(item)
+                continue
+
+            context_length = (
+                int(sum(original_encoded["attention_mask"][0]))
+                - response_length
+            )
+            score_per_position = []
+            for response_token_index in range(
+                response_length - 1
+            ):  # To avoid [SEP] masking
+                mask_position = response_token_index + context_length
+                attacked_ids = original_encoded["input_ids"][0]
+                attacked_ids = np.concatenate(
+                    [
+                        attacked_ids[:mask_position].numpy(),
+                        attacked_ids[mask_position + 1 :].numpy(),
+                        [tokenizer.pad_token_id],
+                    ]
+                ).tolist()
+                attacked_input = {
+                    "input_ids": torch.tensor([attacked_ids]),
+                    "token_type_ids": torch.tensor(
+                        [
+                            [0 for _ in range(context_length)]
+                            + [1 for _ in range(response_length - 1)]
+                            + [
+                                0
+                                for _ in range(
+                                    128 - context_length - response_length + 1
+                                )
+                            ]
+                        ]
+                    ),
+                    "attention_mask": torch.tensor(
+                        [
+                            [
+                                1
+                                for _ in range(
+                                    context_length + response_length - 1
+                                )
+                            ]
+                            + [
+                                0
+                                for i in range(
+                                    128 - context_length - response_length + 1
+                                )
+                            ]
+                        ]
+                    ),
+                }
+                attacked_score = get_nsp_score(
+                    attacked_input,
+                    model,
+                    device,
+                )
+                score_per_position.append(attacked_score)
+            assert len(score_per_position) == len(tokenized_response)
+            item = {
+                "context": context,
+                "response": response,
+                "tokenized_response": tokenized_response,
+                "original_nsp": original_score,
+                "vurnerable_nsp": score_per_position,
+            }
+            result.append(item)
+        fname = "valid" if dataset_index == 0 else "train"
+        with open("vurnerable/" + fname, "w") as f:
+            for el in result:
+                json.dump(el, f)
+                f.write("\n")
 
 
 def get_nsp_score(sample, model, device) -> float:
@@ -80,4 +347,5 @@ def get_nsp_score(sample, model, device) -> float:
 
 
 if __name__ == "__main__":
-    main()
+    # scoring()
+    attack()

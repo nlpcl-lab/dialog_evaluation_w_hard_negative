@@ -88,7 +88,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--exp_name",
         type=str,
-        default="del_prev_turn-topk100_neg2",  # "rand_neg1"
+        default="k5_maxchange0.5_nspoveronly0.3_scorediff0.01",  # "attack_k5_ratio0.5_threshold0.3_exceptoverthreshold",  # "del_prev_turn-topk100_neg2",  # "rand_neg1"
     )  # "prefix-topk100_neg2")
     parser.add_argument("--num_neg", type=int, default=2)
     parser.add_argument("--log_path", type=str, default="logs")
@@ -98,7 +98,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--data_path",
         type=str,
-        default="./data/negative/del_prev_turn-topk100_neg{}_{}.txt",  # "./data/negative/prefix-topk100_neg{}_{}.txt",
+        default="./data/negative/neg{}_{}_k5_maxchange0.5_nspoveronly0.3_scorediff0.01.txt",  # "./data/negative/neg{}_{}_k5_maxchange0.5_nspoveronly0.3_scorediff0.01",  # "./data/negative/neg{}_{}_k1_maxchange1.0_nspover0.3_scorediff0.05.txt",  # "./data/negative/neg{}_{}_pred5_numtokenratio0.5_nspthreshold0.3_scorediff0.01.txt",  # "./data/negative/del_prev_turn-topk100_neg{}_{}.txt",  # "./data/negative/prefix-topk100_neg{}_{}.txt",
     )
 
     args = parser.parse_args()
