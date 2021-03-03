@@ -25,6 +25,9 @@ from utils import (
 
 from datasets import TURN_TOKEN, NSPDataset, EvalDataset
 
+class BertRankModel(torch.nn.Module):
+    def __init__(self,)
+
 
 def main(args):
     set_random_seed(42)

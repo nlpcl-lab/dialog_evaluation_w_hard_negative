@@ -7,18 +7,120 @@ from tqdm import tqdm
 TURN_TOKEN = "[SEPT]"
 
 
-class RankDataset(Dataset):
-    def __init__():
-        pass
-
-
 class NSPDataset(Dataset):
-    def __init__(self, fname, max_seq_len: int, tokenizer, num_neg: int = 1):
+    def __init__(
+        self,
+        fname,
+        max_seq_len: int,
+        tokenizer,
+        num_neg: int = 1,
+        rank_loss: bool = False,
+    ):
         self.max_seq_len = max_seq_len
         self.tokenizer = tokenizer
         self.num_neg = num_neg
+        self.fname = fname
+
         self.raw_data = self.read_dataset(fname)
-        self.feature = self._make_feature(self.raw_data)
+        self.rank_loss = rank_loss
+        if not self.rank_loss:
+            self.feature = self._make_feature(self.raw_data)
+        else:
+            self.rand2_fname = "./data/negative/random_neg2_{}.txt"
+            self.random_neg2_dataset = self.read_dataset(self.rand2_fname)
+            self.feature = self._make_feature_for_rank_loss(self.raw_data)
+
+    def _get_random_negative(self, idx, setname):
+        """
+        혹시 negative가 없는데 ranking  loss를 쓰면 대신 random negative를 backup으로 씀.
+        """
+        assert setname in self.fname
+        neg = self.random_neg2_dataset[idx][-1]
+        assert isinstance(neg, str)
+        return neg
+
+    def _make_feature_for_rank_loss(self, raw_data):
+        (
+            context_ids,
+            context_masks,
+            golden_ids,
+            golden_masks,
+            negative1_ids,
+            negative1_masks,
+        ) = [[] for _ in range(6)]
+        if self.num_neg == 2:
+            negative2_ids, negative2_masks = [], []
+
+        for item_idx, item in enumerate(tqdm(raw_data)):
+            if self.num_neg == 1:
+                context, response, negative1 = item
+            elif self.num_neg == 2:
+                context, response, negative1, negative2 = item
+            else:
+                raise ValueError()
+            context = self.tokenizer(
+                context,
+                max_length=128,
+                padding="max_length",
+                truncation=True,
+                return_tensors="pt",
+            )
+            context_ids.extend(context["input_ids"])
+            context_masks.extend(context["attention_mask"])
+            response = self.tokenizer(
+                response,
+                max_length=128,
+                padding="max_length",
+                truncation=True,
+                return_tensors="pt",
+            )
+            golden_ids.extend(response["input_ids"])
+            golden_masks.extend(response["attention_mask"])
+            negative1 = self.tokenizer(
+                negative1,
+                max_length=128,
+                padding="max_length",
+                truncation=True,
+                return_tensors="pt",
+            )
+            negative1_ids.extend(negative1["input_ids"])
+            negative1_masks.extend(negative1["attention_mask"])
+            if self.num_neg == 2:
+                if negative2 == "[NONE]":
+                    negative2 = self._get_random_negative(
+                        item_idx,
+                        setname="train" if "train" in self.fname else "valid",
+                    )
+                negative2 = self.tokenizer(
+                    negative2,
+                    max_length=128,
+                    padding="max_length",
+                    truncation=True,
+                    return_tensors="pt",
+                )
+                negative2_ids.extend(negative2["input_ids"])
+                negative2_masks.extend(negative2["attention_mask"])
+
+        if self.num_neg == 2:
+            return (
+                torch.stack(context_ids),
+                torch.stack(context_masks),
+                torch.stack(golden_ids),
+                torch.stack(golden_masks),
+                torch.stack(negative1_ids),
+                torch.stack(negative1_masks),
+                torch.stack(negative2_ids),
+                torch.stack(negative2_masks),
+            )
+        else:
+            return (
+                torch.stack(context_ids),
+                torch.stack(context_masks),
+                torch.stack(golden_ids),
+                torch.stack(golden_masks),
+                torch.stack(negative1_ids),
+                torch.stack(negative1_masks),
+            )
 
     def read_dataset(self, fname):
         raw = read_raw_file(fname)
