@@ -20,9 +20,11 @@ from datasets import TURN_TOKEN, EvalDataset, NSPDataset
 from utils import get_logger, read_raw_file, set_random_seed
 
 NUM_TOPK_PREDICTION = 1
-MAX_CHANGE_RATIO = 1.0
-STOP_NSP_THRESHOLD = 0.5
-SCORE_DIFF = 0.01
+MIN_CHANGE_RATIO = 0.15
+MAX_CHANGE_RATIO = 0.5
+STOP_NSP_THRESHOLD = 0.3
+# SCORE_DIFF = 0.005
+SCORE_DIFF = -100
 
 
 def attack():
@@ -85,9 +87,10 @@ def attack():
                 item["original_nsp"],
                 item["vurnerable_nsp"],
             )
-            if original_score < 0.8:
+            if original_score < 0.5:
                 result.append("[NONE]")
                 continue
+
             original_encoded = tokenizer(
                 context,
                 text_pair=response,
@@ -109,8 +112,9 @@ def attack():
 
             original_score = get_nsp_score(original_encoded, model, device)
             # Double check the consistency of the score
-            if original_score < 0.8:
-                raise ValueError
+            if original_score < 0.5:
+                result.append("[NONE]")
+                continue
 
             input_ids = original_encoded["input_ids"]
             assert len(vurnerable_score) == len(tokenized_response)
@@ -120,12 +124,13 @@ def attack():
             )
             attacked_response = tokenized_response[:]
             lowest_token, lowest_score = None, 100
-
+            
+            changed_counter = 0
             for changed_num, token_index in enumerate(sorted_score_diff_list):
                 if score_diff_list[token_index] > -SCORE_DIFF:
                     break
                 if (
-                    changed_num / len(sorted_score_diff_list)
+                    changed_counter / len(sorted_score_diff_list)
                     > MAX_CHANGE_RATIO
                 ):
                     break
@@ -164,21 +169,29 @@ def attack():
                     if lowest_score > nsp_score:
                         lowest_score = nsp_score
                         lowest_token = likely_token
-
+            
+                if lowest_score > original_score:
+                    continue
                 input_ids[0, context_length + token_index] = lowest_token
                 attacked_response[
                     token_index
                 ] = tokenizer.convert_ids_to_tokens([lowest_token])[0]
-                # if lowest_score < STOP_NSP_THRESHOLD:
-                #    break
+                changed_counter +=1
+                if lowest_score < STOP_NSP_THRESHOLD:
+                    if changed_counter / len(sorted_score_diff_list) > MIN_CHANGE_RATIO:
+                        #print(changed_counter, len(sorted_score_diff_list))
+                        break
             if lowest_score >= STOP_NSP_THRESHOLD:
                 result.append("[NONE]")
                 continue
             result.append(" ".join(attacked_response).replace(" ##", ""))
+            #print(tokenized_response)
+            #print(attacked_response)
+            #print()
             assert "##" not in result
 
         assert len(dataset) == len(result)
-        fname_suffix = f"_k{NUM_TOPK_PREDICTION}_maxchange{MAX_CHANGE_RATIO}_nspoveronly{STOP_NSP_THRESHOLD}_scorediff{SCORE_DIFF}.txt"
+        fname_suffix = f"_k{NUM_TOPK_PREDICTION}_maxchange{MAX_CHANGE_RATIO}_minchange{MIN_CHANGE_RATIO}_nspoveronly{STOP_NSP_THRESHOLD}.txt"
         with open(
             "attack/"
             + "neg2_"

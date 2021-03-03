@@ -7,6 +7,11 @@ from tqdm import tqdm
 TURN_TOKEN = "[SEPT]"
 
 
+class RankDataset(Dataset):
+    def __init__():
+        pass
+
+
 class NSPDataset(Dataset):
     def __init__(self, fname, max_seq_len: int, tokenizer, num_neg: int = 1):
         self.max_seq_len = max_seq_len

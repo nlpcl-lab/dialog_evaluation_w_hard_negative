@@ -29,6 +29,7 @@ class Trainer:
         logger: Logger,
         device,
         dataset_for_correlation,
+        is_rank_loss: bool = False,
     ):
         self.model = model
         self.train_loader = train_loader
@@ -36,6 +37,7 @@ class Trainer:
         self.logger = logger
         self.device = device
         self.config = config
+        self.is_rank_loss = is_rank_loss
         self.crossentropy = CrossEntropyLoss()
         self.optimizer = AdamW(
             model.parameters(),
@@ -114,11 +116,15 @@ class Trainer:
         with torch.no_grad():
             for step, batch in enumerate(tqdm(self.valid_loader), start=1):
                 batch = tuple(el.to(self.device) for el in batch)
-                ids, token_type, attn, label = batch
-                output = self.model(
-                    ids, attn, token_type, next_sentence_label=label
-                )
-                loss = output[0]
+                if self.is_rank_loss:
+                    loss = None
+                else:
+                    ids, token_type, attn, label = batch
+                    output = self.model(
+                        ids, attn, token_type, next_sentence_label=label
+                    )
+                    loss = output[0]
+
                 loss_list.append(loss.cpu().detach().numpy())
 
         final_loss = sum(loss_list) / len(loss_list)
@@ -126,9 +132,14 @@ class Trainer:
         return final_loss
 
     def _train_step(self, batch):
-        ids, token_type, attn, label = batch
-        output = self.model(ids, attn, token_type, next_sentence_label=label)
-        loss = output[0]
+        if self.is_rank_loss:
+            loss = None
+        else:
+            ids, token_type, attn, label = batch
+            output = self.model(
+                ids, attn, token_type, next_sentence_label=label
+            )
+            loss = output[0]
         perf = {}
         loss.backward()
         torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
