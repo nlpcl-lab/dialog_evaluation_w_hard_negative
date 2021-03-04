@@ -190,10 +190,43 @@ class NSPDataset(Dataset):
 
 
 class EvalDataset:
-    def __init__(self, dataset, max_seq_len: int, tokenizer):
+    def __init__(
+        self, dataset, max_seq_len: int, tokenizer, rank_loss: bool = False
+    ):
         self.max_seq_len = max_seq_len
         self.tokenizer = tokenizer
-        self.feature = self.make_feature(dataset)
+        if rank_loss:
+            self.feature = self.make_feature_for_rank(dataset)
+        else:
+            self.feature = self.make_feature(dataset)
+
+    def make_feature_for_rank(self, raw_zhao_data):
+        encoded_list = []
+        for item in raw_zhao_data:
+            ctx = TURN_TOKEN.join(item["ctx"])
+            # ref = item["ref"]
+            hyp = item["hyp"]
+            score = item["human_score"]
+            encoded = {}
+            ctx = self.tokenizer(
+                ctx,
+                max_length=128,
+                padding="max_length",
+                truncation=True,
+                return_tensors="pt",
+            )
+            hyp = self.tokenizer(
+                hyp,
+                max_length=128,
+                padding="max_length",
+                truncation=True,
+                return_tensors="pt",
+            )
+            encoded["ctx"] = ctx
+            encoded["hyp"] = hyp
+            encoded["human_score"] = score
+            encoded_list.append(encoded)
+        return encoded_list
 
     def make_feature(self, raw_zhao_data):
         """

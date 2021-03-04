@@ -117,7 +117,43 @@ class Trainer:
             for step, batch in enumerate(tqdm(self.valid_loader), start=1):
                 batch = tuple(el.to(self.device) for el in batch)
                 if self.is_rank_loss:
-                    loss = None
+                    if self.config.num_neg == 1:
+                        (
+                            ctx_ids,
+                            ctx_mask,
+                            golden_ids,
+                            golden_mask,
+                            neg1_ids,
+                            neg1_mask,
+                        ) = batch
+                    if self.config.num_neg == 2:
+                        (
+                            ctx_ids,
+                            ctx_mask,
+                            golden_ids,
+                            golden_mask,
+                            neg1_ids,
+                            neg1_mask,
+                            neg2_ids,
+                            neg2_mask,
+                        ) = batch
+                    # shape of [batch_size, 1]
+                    golden_score = self.model(
+                        ctx_ids, ctx_mask, golden_ids, golden_mask
+                    )
+                    neg1_score = self.model(
+                        ctx_ids, ctx_mask, neg1_ids, neg1_mask
+                    )
+                    if self.config.num_neg == 2:
+                        neg2_score = self.model(
+                            ctx_ids, ctx_mask, neg2_ids, neg2_mask
+                        )
+                    prediction = torch.cat(
+                        [golden_score, neg1_score, neg2_score], 1
+                    )
+                    loss = self.crossentropy(
+                        prediction, torch.ones(self.config.batch_size)
+                    )
                 else:
                     ids, token_type, attn, label = batch
                     output = self.model(
@@ -133,7 +169,39 @@ class Trainer:
 
     def _train_step(self, batch):
         if self.is_rank_loss:
-            loss = None
+            if self.config.num_neg == 1:
+                (
+                    ctx_ids,
+                    ctx_mask,
+                    golden_ids,
+                    golden_mask,
+                    neg1_ids,
+                    neg1_mask,
+                ) = batch
+            if self.config.num_neg == 2:
+                (
+                    ctx_ids,
+                    ctx_mask,
+                    golden_ids,
+                    golden_mask,
+                    neg1_ids,
+                    neg1_mask,
+                    neg2_ids,
+                    neg2_mask,
+                ) = batch
+            # shape of [batch_size, 1]
+            golden_score = self.model(
+                ctx_ids, ctx_mask, golden_ids, golden_mask
+            )
+            neg1_score = self.model(ctx_ids, ctx_mask, neg1_ids, neg1_mask)
+            if self.config.num_neg == 2:
+                neg2_score = self.model(
+                    ctx_ids, ctx_mask, neg2_ids, neg2_mask
+                )
+            prediction = torch.cat([golden_score, neg1_score, neg2_score], 1)
+            loss = self.crossentropy(
+                prediction, torch.ones(self.config.batch_size)
+            )
         else:
             ids, token_type, attn, label = batch
             output = self.model(

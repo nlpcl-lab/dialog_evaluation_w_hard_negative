@@ -2,16 +2,18 @@ import argparse
 import os
 
 import torch
+from torch import nn
 from tensorboardX import SummaryWriter
 from torch.optim.adamw import AdamW
 from torch.utils.data import DataLoader, Dataset, RandomSampler
 from tqdm import tqdm
 from transformers import (
     BertConfig,
-    BertForNextSentencePrediction,
+    BertModel,
     BertTokenizer,
 )
 
+from bert_rank_model import BertRankModel
 from get_dataset import get_dd_corpus, get_zhao_dataset
 from trainer import Trainer
 from utils import (
@@ -25,9 +27,6 @@ from utils import (
 
 from datasets import TURN_TOKEN, NSPDataset, EvalDataset
 
-class BertRankModel(torch.nn.Module):
-    def __init__(self,)
-
 
 def main(args):
     set_random_seed(42)
@@ -36,18 +35,13 @@ def main(args):
     dump_config(args)
     device = torch.device("cuda")
     tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
-
-    special_tokens_dict = {"additional_special_tokens": ["[SEPT]"]}
-    tokenizer.add_special_tokens(special_tokens_dict)
-
-    model = BertForNextSentencePrediction.from_pretrained("bert-base-uncased")
-    model.resize_token_embeddings(len(tokenizer))
+    bert = BertModel.from_pretrained("bert-base-uncased")
+    bert_config = BertConfig.from_pretrained("bert-base-uncased")
+    model = BertRankModel(bert, bert_config, args)
     model.to(device)
 
     dataset_for_correlation = EvalDataset(
-        get_zhao_dataset("dd"),
-        128,
-        tokenizer,
+        get_zhao_dataset("dd"), 128, tokenizer, rank_loss=True
     )
 
     train_dataset, valid_dataset = (
@@ -56,12 +50,14 @@ def main(args):
             128,
             tokenizer,
             num_neg=args.num_neg,
+            rank_loss=True,
         ),
         NSPDataset(
             args.data_path.format(args.num_neg, "valid"),
             128,
             tokenizer,
             num_neg=args.num_neg,
+            rank_loss=True,
         ),
     )
     trainloader = DataLoader(
@@ -82,6 +78,7 @@ def main(args):
         logger,
         device,
         dataset_for_correlation,
+        is_rank_loss=True,
     )
     trainer.train()
 
@@ -94,7 +91,7 @@ if __name__ == "__main__":
         default="k1_max0.5_min0.15_nsp0.3",  # "attack_k5_ratio0.5_threshold0.3_exceptoverthreshold",  # "del_prev_turn-topk100_neg2",  # "rand_neg1"
     )  # "prefix-topk100_neg2")
     parser.add_argument("--num_neg", type=int, default=2)
-    parser.add_argument("--log_path", type=str, default="logs")
+    parser.add_argument("--log_path", type=str, default="rank_logs")
     parser.add_argument("--batch_size", type=int, default=64)
     parser.add_argument("--lr", type=float, default=2e-5)
     parser.add_argument("--epoch", type=int, default=5)
