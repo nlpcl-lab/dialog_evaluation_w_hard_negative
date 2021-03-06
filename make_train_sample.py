@@ -22,66 +22,6 @@ import random
 TURN_TOKEN = "[SEPT]"
 
 
-class NSPDataset(Dataset):
-    def __init__(self, raw_data, max_seq_len: int, tokenizer):
-        self.max_seq_len = max_seq_len
-        self.tokenizer = tokenizer
-        self.feature = self._make_feature(raw_data)
-
-    def __len__(self):
-        return len(self.feature[0])
-
-    def __getitem__(self, idx):
-        return tuple([el[idx] for el in self.feature])
-
-    def _make_feature(self, raw_data):
-        ctx_inp_ids, ctx_masks, res_inp_ids, res_masks = [
-            [] for _ in range(4)
-        ]
-
-        for item_idx, item in enumerate(raw_data):
-            if item_idx % 100 == 0:
-                print(f"{item_idx}/{len(raw_data)}")
-            assert isinstance(item, list) and all(
-                [isinstance(el, str) for el in item]
-            )
-
-            if len(item) > 6:
-                item = item[:6]
-
-            for uttr_idx in range(len(item) - 1):
-                uttrs = item[: uttr_idx + 2]
-                assert len(uttrs) <= 6
-
-                context, response = TURN_TOKEN.join(uttrs[:-1]), uttrs[-1]
-
-                context = self.tokenizer(
-                    context,
-                    max_length=self.max_seq_len,
-                    padding="max_length",
-                    truncation=True,
-                    return_tensors="pt",
-                )
-                response = self.tokenizer(
-                    response,
-                    max_length=self.max_seq_len,
-                    padding="max_length",
-                    truncation=True,
-                    return_tensors="pt",
-                )
-                ctx_inp_ids.extend(context["input_ids"])
-                ctx_masks.extend(context["attention_mask"])
-                res_inp_ids.extend(response["input_ids"])
-                res_masks.extend(response["attention_mask"])
-
-        return (
-            torch.stack(ctx_inp_ids),
-            torch.stack(ctx_masks),
-            torch.stack(res_inp_ids),
-            torch.stack(res_masks),
-        )
-
-
 def make_annotated_dataset(raw_zhao_data, tokenizer):
     ctx_ids, ref_ids, hyp_ids, human_score = [], [], [], []
     for item in raw_zhao_data:

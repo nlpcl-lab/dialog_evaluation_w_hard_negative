@@ -34,7 +34,7 @@ def main(args):
     device = torch.device("cuda")
     tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
 
-    special_tokens_dict = {"additional_special_tokens": ["[SEPT]"]}
+    special_tokens_dict = {"additional_special_tokens": [TURN_TOKEN]}
     tokenizer.add_special_tokens(special_tokens_dict)
 
     model = BertForNextSentencePrediction.from_pretrained("bert-base-uncased")
@@ -61,6 +61,7 @@ def main(args):
             num_neg=args.num_neg,
         ),
     )
+
     trainloader = DataLoader(
         train_dataset,
         sampler=RandomSampler(train_dataset),
@@ -88,7 +89,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--exp_name",
         type=str,
-        default="k1_max0.5_min0.15_nsp0.3",  # "attack_k5_ratio0.5_threshold0.3_exceptoverthreshold",  # "del_prev_turn-topk100_neg2",  # "rand_neg1"
+        # "attack_k5_ratio0.5_threshold0.3_exceptoverthreshold",  # "del_prev_turn-topk100_neg2",  # "rand_neg1"
+        default="k5_maxchange0.5_minchange0.2_nspoveronly0.25",
     )  # "prefix-topk100_neg2")
     parser.add_argument("--num_neg", type=int, default=2)
     parser.add_argument("--log_path", type=str, default="logs")
@@ -98,7 +100,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--data_path",
         type=str,
-        default="./data/negative/neg{}_{}_k1_maxchange0.5_minchange0.15_nspoveronly0.3.txt",  # "./data/negative/neg{}_{}_k5_maxchange0.5_nspoveronly0.3_scorediff0.01",  # "./data/negative/neg{}_{}_k1_maxchange1.0_nspover0.3_scorediff0.05.txt",  # "./data/negative/neg{}_{}_pred5_numtokenratio0.5_nspthreshold0.3_scorediff0.01.txt",  # "./data/negative/del_prev_turn-topk100_neg{}_{}.txt",  # "./data/negative/prefix-topk100_neg{}_{}.txt",
+        # "./data/negative/neg{}_{}_k5_maxchange0.5_nspoveronly0.3_scorediff0.01",  # "./data/negative/neg{}_{}_k1_maxchange1.0_nspover0.3_scorediff0.05.txt",  # "./data/negative/neg{}_{}_pred5_numtokenratio0.5_nspthreshold0.3_scorediff0.01.txt",  # "./data/negative/del_prev_turn-topk100_neg{}_{}.txt",  # "./data/negative/prefix-topk100_neg{}_{}.txt",
+        # "./data/negative/neg{}_{}_k1_maxchange0.5_minchange0.15_nspoveronly0.3.txt",
+        # "./data/negative/random_neg{}_{}.txt"
+        default="./data/negative/neg{}_{}_k5_maxchange0.5_minchange0.2_nspoveronly0.25.txt",
     )
 
     args = parser.parse_args()

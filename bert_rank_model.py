@@ -7,15 +7,14 @@ class BertRankModel(torch.nn.Module):
         super(BertRankModel, self).__init__()
 
         self.bert = bert
-        for param in self.bert.parameters():
-            param.requires_grad = False
+
         self.config = config
         self.bert_config = bert_config
 
         self.M = nn.Parameter(
             torch.FloatTensor(
                 self.bert_config.hidden_size, self.bert_config.hidden_size
-            )
+            ), requires_grad=True
         )
         self.prediction_layer = nn.Sequential(
             nn.Dropout(0.3),
@@ -23,18 +22,24 @@ class BertRankModel(torch.nn.Module):
                 2 * self.bert_config.hidden_size + 1,
                 self.bert_config.hidden_size,
             ),
-            nn.Tanh(),
+            nn.ReLU(),
             nn.Dropout(0.3),
             nn.Linear(self.bert_config.hidden_size, 1),
-            torch.sigmoid(),
+            nn.Tanh()
         )
+
+        def init_weights(m):
+            if type(m) == nn.Linear:
+                torch.nn.init.xavier_uniform(m.weight)
+                m.bias.data.fill_(0.01)
+        self.prediction_layer.apply(init_weights)
 
     def forward(self, context_ids, context_mask, response_ids, response_mask):
         context_outputs, _ = self.bert(
-            context_ids, attention_mask=context_mask
+            context_ids, attention_mask=context_mask, return_dict=False
         )
         response_outputs, _ = self.bert(
-            response_ids, attention_mask=response_mask
+            response_ids, attention_mask=response_mask, return_dict=False
         )
 
         expanded_context_mask = (
@@ -45,17 +50,16 @@ class BertRankModel(torch.nn.Module):
             .expand(response_outputs.size())
             .float()
         )
-        expanded_context_mask[expanded_context_mask == 0] = -1e9
-        context_outputs = context_outputs * expanded_context_mask
-        pooled_context, _ = torch.max(context_outputs, 1)
-
-        expanded_response_mask[expanded_response_mask == 0] = -1e9
-        response_outputs = response_outputs * expanded_response_mask
-        pooled_response, _ = torch.max(response_outputs, 1)
+        pooled_context = torch.sum(
+            context_outputs * expanded_context_mask, 1
+        ) / torch.clamp(expanded_context_mask.sum(1), min=1e-9)
+        pooled_response = torch.sum(
+            response_outputs * expanded_response_mask, 1
+        ) / torch.clamp(expanded_response_mask.sum(1), min=1e-9)
 
         context_response_dot = (
             (
-                torch.matmul(pooled_context, self.attention_matrix)
+                torch.matmul(pooled_context, self.M)
                 * pooled_response
             )
             .sum(1)

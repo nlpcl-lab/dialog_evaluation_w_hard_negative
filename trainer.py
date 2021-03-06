@@ -57,8 +57,8 @@ class Trainer:
         os.makedirs(self.config.board_path, exist_ok=True)
 
         self.model.eval()
-        self._calc_correlation(global_step)
-        val_loss = self._validation(global_step)
+        # self._calc_correlation(global_step)
+        #val_loss = self._validation(global_step)
         self.model.train()
 
         for epoch in range(self.config.epoch):
@@ -82,7 +82,7 @@ class Trainer:
 
     def _calc_correlation(self, global_step):
         evaluation_result = eval_by_NSP(
-            self.eval_dataset_for_correlation, self.model, self.device
+            self.eval_dataset_for_correlation, self.model, self.device, is_rank=self.is_rank_loss
         )
 
         result = {}
@@ -152,7 +152,8 @@ class Trainer:
                         [golden_score, neg1_score, neg2_score], 1
                     )
                     loss = self.crossentropy(
-                        prediction, torch.ones(self.config.batch_size)
+                        prediction, torch.zeros(
+                            self.config.batch_size, dtype=torch.long).to(self.device)
                     )
                 else:
                     ids, token_type, attn, label = batch
@@ -198,9 +199,12 @@ class Trainer:
                 neg2_score = self.model(
                     ctx_ids, ctx_mask, neg2_ids, neg2_mask
                 )
+
             prediction = torch.cat([golden_score, neg1_score, neg2_score], 1)
+
             loss = self.crossentropy(
-                prediction, torch.ones(self.config.batch_size)
+                prediction, torch.zeros(
+                    self.config.batch_size, dtype=torch.long).to(self.device)
             )
         else:
             ids, token_type, attn, label = batch
@@ -210,7 +214,7 @@ class Trainer:
             loss = output[0]
         perf = {}
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
+        torch.nn.utils.clip_grad_norm_(self.model.parameters(), 5.0)
         self.optimizer.step()
         self.optimizer.zero_grad()
         return loss, perf

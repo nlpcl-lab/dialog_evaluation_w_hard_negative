@@ -1,6 +1,7 @@
 env/
 data/
 logs/
+logs_43/
 __pycache__/
 .vscode/
 attack/

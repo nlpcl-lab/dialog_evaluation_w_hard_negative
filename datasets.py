@@ -26,7 +26,9 @@ class NSPDataset(Dataset):
         if not self.rank_loss:
             self.feature = self._make_feature(self.raw_data)
         else:
-            self.rand2_fname = "./data/negative/random_neg2_{}.txt"
+            setname = 'train' if 'train' in self.fname else 'valid'
+            self.rand2_fname = "./data/negative/random_neg2_{}.txt".format(
+                setname)
             self.random_neg2_dataset = self.read_dataset(self.rand2_fname)
             self.feature = self._make_feature_for_rank_loss(self.raw_data)
 
@@ -52,12 +54,15 @@ class NSPDataset(Dataset):
             negative2_ids, negative2_masks = [], []
 
         for item_idx, item in enumerate(tqdm(raw_data)):
+            if item_idx == 1000:
+                break
             if self.num_neg == 1:
                 context, response, negative1 = item
             elif self.num_neg == 2:
                 context, response, negative1, negative2 = item
             else:
                 raise ValueError()
+
             context = self.tokenizer(
                 context,
                 max_length=128,
@@ -128,6 +133,8 @@ class NSPDataset(Dataset):
         return raw
 
     def __len__(self):
+        assert len(self.feature[0]) == len(
+            self.feature[1]) == len(self.feature[2])
         return len(self.feature[0])
 
     def __getitem__(self, idx):

@@ -1,4 +1,5 @@
-import os, json
+import os
+import json
 import torch
 import random
 import numpy as np
@@ -46,22 +47,33 @@ def get_correlation(human_score: List[float], model_score: List[float]):
     return p[0], s[0]
 
 
-def eval_by_NSP(dataset, model, device):
+def eval_by_NSP(dataset, model, device, is_rank: bool = False):
     recorder = []
     softmax = torch.nn.Softmax(dim=1)
     feature = dataset.feature
 
     for batch in feature:
-        ids, types, masks, scores = (
-            batch["input_ids"].to(device),
-            batch["token_type_ids"].to(device),
-            batch["attention_mask"].to(device),
-            torch.tensor(batch["human_score"]).to(device),
-        )
-        with torch.no_grad():
-            prediction = (
-                softmax(model(ids, masks, types)[0]).cpu().numpy()[0][0]
+        if is_rank:
+            context, response = batch['ctx'], batch['hyp']
+            ctx_ids, ctx_mask = context['input_ids'].to(
+                device), context['attention_mask'].to(device)
+            hyp_ids, hyp_mask = response['input_ids'].to(
+                device), response['attention_mask'].to(device)
+            with torch.no_grad():
+                prediction = model(ctx_ids, ctx_mask, hyp_ids,
+                                   hyp_mask).cpu().numpy()[0][0]
+
+        else:
+            ids, types, masks, scores = (
+                batch["input_ids"].to(device),
+                batch["token_type_ids"].to(device),
+                batch["attention_mask"].to(device),
+                torch.tensor(batch["human_score"]).to(device),
             )
+            with torch.no_grad():
+                prediction = (
+                    softmax(model(ids, masks, types)[0]).cpu().numpy()[0][0]
+                )
         recorder.append(
             {"human_score": batch["human_score"], "nsp": prediction}
         )
