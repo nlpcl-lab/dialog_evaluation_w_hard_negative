@@ -6,6 +6,10 @@ import numpy as np
 from scipy.stats import pearsonr, spearmanr
 from typing import List
 import logging
+import tensorflow_hub as hub
+
+def get_usencoder():
+    return hub.load("https://tfhub.dev/google/universal-sentence-encoder/4")
 
 
 def set_random_seed(seed: int = 42):
