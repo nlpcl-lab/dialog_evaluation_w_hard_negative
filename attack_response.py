@@ -15,19 +15,21 @@ from transformers import (
     BertTokenizer,
     BertForMaskedLM,
 )
+from sklearn.metrics.pairwise import cosine_similarity
 
 from datasets import TURN_TOKEN, EvalDataset, NSPDataset
-from utils import get_logger, read_raw_file, set_random_seed
+from utils import get_logger, read_raw_file, set_random_seed, get_usencoder
 
-NUM_TOPK_PREDICTION = 3
+NUM_TOPK_PREDICTION = 5
 MIN_CHANGE_RATIO = 0.2
 MAX_CHANGE_RATIO = 0.5
-STOP_NSP_THRESHOLD = 0.25
+STOP_NSP_THRESHOLD = 0.4
 # SCORE_DIFF = 0.005
 SCORE_DIFF = -100
-
+USE_USE = True
 
 def attack():
+    use = get_usencoder()
     logger = get_logger()
     set_random_seed()
     device = torch.device("cuda")
@@ -60,7 +62,7 @@ def attack():
         read_raw_file("./data/negative/random_neg1_valid.txt"),
     )
     os.makedirs("attack", exist_ok=True)
-    softmax = torch.nn.Softmax()
+    softmax = torch.nn.Softmax(dim=0)
 
     for dataset_index, dataset in enumerate([valid_raw, train_raw]):
         load_fname = (
@@ -107,6 +109,8 @@ def attack():
                 truncation=True,
                 return_tensors="pt",
             )
+            original_emb= use([response])[0]
+        
 
             response_length = int(sum(original_encoded["token_type_ids"][0]))
             assert response_length == len(tokenized_response) + 1
@@ -126,7 +130,7 @@ def attack():
                 result.append("[NONE]")
                 continue
 
-            input_ids = original_encoded["input_ids"]
+            input_ids = original_encoded["input_ids"].clone().detach()
             assert len(vurnerable_score) == len(tokenized_response)
             score_diff_list = [el - original_score for el in vurnerable_score]
             sorted_score_diff_list = sorted(
@@ -148,9 +152,7 @@ def attack():
                 original_token_id = tokenizer._convert_token_to_id(
                     attacked_response[token_index]
                 )
-
                 attacked_response[token_index] = tokenizer.mask_token
-
                 model_input = torch.tensor(
                     [
                         tokenizer.convert_tokens_to_ids(
@@ -170,23 +172,50 @@ def attack():
                 sorted_idx = torch.argsort(
                     score_in_response, descending=True
                 )[:NUM_TOPK_PREDICTION]
-                lowest_token, lowest_score = None, 100
 
-                for likely_token in sorted_idx:
-                    input_ids[0, context_length + token_index] = likely_token
-                    original_encoded["input_ids"] = input_ids
-                    nsp_score = get_nsp_score(original_encoded, model, device)
-                    if lowest_score > nsp_score:
-                        lowest_score = nsp_score
-                        lowest_token = likely_token
+                if not USE_USE:
+                    lowest_token, lowest_score = None, 100
+                    for likely_token in sorted_idx:
+                        copied_input_ids = input_ids.clone().detach()
+                        copied_input_ids[0, context_length + token_index] = likely_token
+                        original_encoded["input_ids"] = copied_input_ids
+                        nsp_score = get_nsp_score(original_encoded, model, device)
+                        if lowest_score > nsp_score:
+                            lowest_score = nsp_score
+                            lowest_token = likely_token
+                else:
+                    unsimilar_token, unsimilar_score = None, 100
+                    for likely_token in sorted_idx:
+                        tmp_attacked_response = attacked_response[:]
+                        tmp_attacked_response[token_index] = tokenizer.convert_ids_to_tokens([likely_token])[0]
+                        attacked_emb = use([' '.join(tmp_attacked_response).replace(" ##","")])[0]
+                        cossim = cosine_similarity([original_emb], [attacked_emb])[0][0]
+                        if cossim < unsimilar_score:
+                            unsimilar_score = cossim
+                            unsimilar_token = likely_token
 
+                    copied_input_ids = input_ids.clone().detach()
+                    copied_input_ids[0, context_length + token_index] = unsimilar_token
+                    original_encoded["input_ids"] = copied_input_ids
+                    lowest_score = get_nsp_score(original_encoded, model, device)
+                    lowest_token = unsimilar_token
+                
+                # 원래꺼 안건드렸는지 확인
+                assert input_ids[0, context_length + token_index] == original_token_id
                 if lowest_score > original_score:
                     continue
+                '''
+                Change
+                '''
                 input_ids[0, context_length + token_index] = lowest_token
                 attacked_response[
                     token_index
                 ] = tokenizer.convert_ids_to_tokens([lowest_token])[0]
                 changed_counter += 1
+
+                '''
+                BREAK CONDITION
+                '''
                 if lowest_score < STOP_NSP_THRESHOLD:
                     if changed_counter / len(sorted_score_diff_list) > MIN_CHANGE_RATIO:
                         #print(changed_counter, len(sorted_score_diff_list))
@@ -207,7 +236,10 @@ def attack():
             assert "##" not in result
 
         assert len(dataset) == len(result)
+        
         fname_suffix = f"_k{NUM_TOPK_PREDICTION}_maxchange{MAX_CHANGE_RATIO}_minchange{MIN_CHANGE_RATIO}_nspoveronly{STOP_NSP_THRESHOLD}.txt"
+        if USE_USE:
+            fname_suffix = fname_suffix.replace(".txt","_usesort.txt")
         with open(
             "attack/"
             + "neg2_"
