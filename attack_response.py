@@ -21,12 +21,13 @@ from datasets import TURN_TOKEN, EvalDataset, NSPDataset
 from utils import get_logger, read_raw_file, set_random_seed, get_usencoder
 
 NUM_TOPK_PREDICTION = 5
-MIN_CHANGE_RATIO = 0.2
-MAX_CHANGE_RATIO = 0.5
+MIN_CHANGE_RATIO = 0.1
+MAX_CHANGE_RATIO = 0.3
 STOP_NSP_THRESHOLD = 0.4
 # SCORE_DIFF = 0.005
 SCORE_DIFF = -100
-USE_USE = True
+USE_USE = False
+
 
 def attack():
     use = get_usencoder()
@@ -109,8 +110,7 @@ def attack():
                 truncation=True,
                 return_tensors="pt",
             )
-            original_emb= use([response])[0]
-        
+            original_emb = use([response])[0]
 
             response_length = int(sum(original_encoded["token_type_ids"][0]))
             assert response_length == len(tokenized_response) + 1
@@ -177,9 +177,11 @@ def attack():
                     lowest_token, lowest_score = None, 100
                     for likely_token in sorted_idx:
                         copied_input_ids = input_ids.clone().detach()
-                        copied_input_ids[0, context_length + token_index] = likely_token
+                        copied_input_ids[0, context_length +
+                                         token_index] = likely_token
                         original_encoded["input_ids"] = copied_input_ids
-                        nsp_score = get_nsp_score(original_encoded, model, device)
+                        nsp_score = get_nsp_score(
+                            original_encoded, model, device)
                         if lowest_score > nsp_score:
                             lowest_score = nsp_score
                             lowest_token = likely_token
@@ -187,21 +189,27 @@ def attack():
                     unsimilar_token, unsimilar_score = None, 100
                     for likely_token in sorted_idx:
                         tmp_attacked_response = attacked_response[:]
-                        tmp_attacked_response[token_index] = tokenizer.convert_ids_to_tokens([likely_token])[0]
-                        attacked_emb = use([' '.join(tmp_attacked_response).replace(" ##","")])[0]
-                        cossim = cosine_similarity([original_emb], [attacked_emb])[0][0]
+                        tmp_attacked_response[token_index] = tokenizer.convert_ids_to_tokens([
+                                                                                             likely_token])[0]
+                        attacked_emb = use(
+                            [' '.join(tmp_attacked_response).replace(" ##", "")])[0]
+                        cossim = cosine_similarity(
+                            [original_emb], [attacked_emb])[0][0]
                         if cossim < unsimilar_score:
                             unsimilar_score = cossim
                             unsimilar_token = likely_token
 
                     copied_input_ids = input_ids.clone().detach()
-                    copied_input_ids[0, context_length + token_index] = unsimilar_token
+                    copied_input_ids[0, context_length +
+                                     token_index] = unsimilar_token
                     original_encoded["input_ids"] = copied_input_ids
-                    lowest_score = get_nsp_score(original_encoded, model, device)
+                    lowest_score = get_nsp_score(
+                        original_encoded, model, device)
                     lowest_token = unsimilar_token
-                
+
                 # 원래꺼 안건드렸는지 확인
-                assert input_ids[0, context_length + token_index] == original_token_id
+                assert input_ids[0, context_length +
+                                 token_index] == original_token_id
                 if lowest_score > original_score:
                     continue
                 '''
@@ -220,10 +228,10 @@ def attack():
                     if changed_counter / len(sorted_score_diff_list) > MIN_CHANGE_RATIO:
                         #print(changed_counter, len(sorted_score_diff_list))
                         break
-            if lowest_score >= STOP_NSP_THRESHOLD:
-                counter['threshold'] += 1
-                result.append("[NONE]")
-                continue
+            # if lowest_score >= STOP_NSP_THRESHOLD:
+            #     counter['threshold'] += 1
+            #     result.append("[NONE]")
+            #     continue
             if changed_counter / len(sorted_score_diff_list) <= MIN_CHANGE_RATIO:
                 counter['min_change'] += 1
                 result.append("[NONE]")
@@ -236,10 +244,11 @@ def attack():
             assert "##" not in result
 
         assert len(dataset) == len(result)
-        
-        fname_suffix = f"_k{NUM_TOPK_PREDICTION}_maxchange{MAX_CHANGE_RATIO}_minchange{MIN_CHANGE_RATIO}_nspoveronly{STOP_NSP_THRESHOLD}.txt"
+
+        # _nspoveronly{STOP_NSP_THRESHOLD}.txt"
+        fname_suffix = f"_k{NUM_TOPK_PREDICTION}_maxchange{MAX_CHANGE_RATIO}_minchange{MIN_CHANGE_RATIO}_nonspcutoff.txt"
         if USE_USE:
-            fname_suffix = fname_suffix.replace(".txt","_usesort.txt")
+            fname_suffix = fname_suffix.replace(".txt", "_usesort.txt")
         with open(
             "attack/"
             + "neg2_"
