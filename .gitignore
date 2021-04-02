@@ -7,4 +7,6 @@ __pycache__/
 attack/
 *.png
 vurnerable/
-
+baselines/
+logs_wo_ttype/
+rank_logs

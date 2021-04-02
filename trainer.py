@@ -58,7 +58,7 @@ class Trainer:
 
         self.model.eval()
         # self._calc_correlation(global_step)
-        #val_loss = self._validation(global_step)
+        # val_loss = self._validation(global_step)
         self.model.train()
 
         for epoch in range(self.config.epoch):
@@ -82,7 +82,10 @@ class Trainer:
 
     def _calc_correlation(self, global_step):
         evaluation_result = eval_by_NSP(
-            self.eval_dataset_for_correlation, self.model, self.device, is_rank=self.is_rank_loss
+            self.eval_dataset_for_correlation,
+            self.model,
+            self.device,
+            is_rank=self.is_rank_loss,
         )
 
         result = {}
@@ -152,13 +155,18 @@ class Trainer:
                         [golden_score, neg1_score, neg2_score], 1
                     )
                     loss = self.crossentropy(
-                        prediction, torch.zeros(
-                            self.config.batch_size, dtype=torch.long).to(self.device)
+                        prediction,
+                        torch.zeros(
+                            self.config.batch_size, dtype=torch.long
+                        ).to(self.device),
                     )
                 else:
                     ids, token_type, attn, label = batch
                     output = self.model(
-                        ids, attn, token_type, next_sentence_label=label
+                        # ids, attn, token_type, next_sentence_label=label
+                        ids,
+                        attn,
+                        next_sentence_label=label,
                     )
                     loss = output[0]
 
@@ -203,13 +211,18 @@ class Trainer:
             prediction = torch.cat([golden_score, neg1_score, neg2_score], 1)
 
             loss = self.crossentropy(
-                prediction, torch.zeros(
-                    self.config.batch_size, dtype=torch.long).to(self.device)
+                prediction,
+                torch.zeros(self.config.batch_size, dtype=torch.long).to(
+                    self.device
+                ),
             )
         else:
             ids, token_type, attn, label = batch
             output = self.model(
-                ids, attn, token_type, next_sentence_label=label
+                # ids, attn, token_type, next_sentence_label=label
+                ids,
+                attn,
+                next_sentence_label=label,
             )
             loss = output[0]
         perf = {}

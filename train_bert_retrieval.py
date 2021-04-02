@@ -68,9 +68,7 @@ def main(args):
         batch_size=args.batch_size,
         drop_last=True,
     )
-    validloader = DataLoader(
-        valid_dataset, batch_size=args.batch_size, drop_last=True
-    )
+    validloader = DataLoader(valid_dataset, batch_size=args.batch_size, drop_last=True)
 
     trainer = Trainer(
         args,
@@ -89,21 +87,17 @@ if __name__ == "__main__":
     parser.add_argument(
         "--exp_name",
         type=str,
-        # "attack_k5_ratio0.5_threshold0.3_exceptoverthreshold",  # "del_prev_turn-topk100_neg2",  # "rand_neg1"
-        default="k5_maxchange0.5_minchange0.2_nspoveronly0.5_usesort",
-    )  # "prefix-topk100_neg2")
+        default="random_neg2",  # "k5_maxchange0.4_minchange0.1_NSPCUT0.4",  # "random_neg1",
+    )
     parser.add_argument("--num_neg", type=int, default=2)
-    parser.add_argument("--log_path", type=str, default="logs")
+    parser.add_argument("--log_path", type=str, default="logs_wo_ttype")
     parser.add_argument("--batch_size", type=int, default=64)
     parser.add_argument("--lr", type=float, default=2e-5)
     parser.add_argument("--epoch", type=int, default=5)
     parser.add_argument(
         "--data_path",
         type=str,
-        # "./data/negative/neg{}_{}_k5_maxchange0.5_nspoveronly0.3_scorediff0.01",  # "./data/negative/neg{}_{}_k1_maxchange1.0_nspover0.3_scorediff0.05.txt",  # "./data/negative/neg{}_{}_pred5_numtokenratio0.5_nspthreshold0.3_scorediff0.01.txt",  # "./data/negative/del_prev_turn-topk100_neg{}_{}.txt",  # "./data/negative/prefix-topk100_neg{}_{}.txt",
-        # "./data/negative/neg{}_{}_k1_maxchange0.5_minchange0.15_nspoveronly0.3.txt",
-        # "./data/negative/random_neg{}_{}.txt"
-        default="./data/negative/neg{}_{}_k5_maxchange0.5_minchange0.2_nspoveronly0.5_usesort.txt",
+        default="./data/negative/random_neg{}_{}.txt",  # "./attack/neg{}_{}_k5_maxchange0.4_minchange0.1_NSPCUT0.4.txt",  # "./data/negative/random_neg{}_{}.txt",  #
     )
 
     args = parser.parse_args()

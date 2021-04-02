@@ -37,8 +37,7 @@ def get_grade_annotated_dataset(corpus_name: str):
         hyp_fname = os.path.join(text_path, "human_hyp.txt")
 
         scores, ctxs, refs, hyps = [
-            _read_txt_files(fname)
-            for fname in [score_fname, ctx_fname, ref_fname, hyp_fname]
+            _read_txt_files(fname) for fname in [score_fname, ctx_fname, ref_fname, hyp_fname]
         ]
         # assert the same number of samples
         assert len(list(set(list(map(len, [scores, ctxs, refs, hyps]))))) == 1
@@ -87,12 +86,8 @@ def download_Zhao_dataset(
         persona_id (str): Annotated Personachat dataset ID
         persona_output_fname (str): Path for output
     """
-    gdd.download_file_from_google_drive(
-        daily_id, daily_output_fname, unzip=False
-    )
-    gdd.download_file_from_google_drive(
-        persona_id, persona_output_fname, unzip=False
-    )
+    gdd.download_file_from_google_drive(daily_id, daily_output_fname, unzip=False)
+    gdd.download_file_from_google_drive(persona_id, persona_output_fname, unzip=False)
 
 
 def get_zhao_dataset(fname):
@@ -138,18 +133,12 @@ def get_zhao_dataset(fname):
 
 def get_dd_corpus(setname):
     assert setname in ["train", "validation", "test"]
-    fname = "./data/ijcnlp_dailydialog/{}/dialogues_{}.txt".format(
-        setname, setname
-    )
+    fname = "./data/ijcnlp_dailydialog/{}/dialogues_{}.txt".format(setname, setname)
     assert os.path.exists(fname)
     with open(fname, "r") as f:
         ls = [el.strip() for el in f.readlines()]
         for idx, line in enumerate(ls):
-            line = [
-                el.strip().lower()
-                for el in line.split("__eou__")
-                if el.strip() != ""
-            ]
+            line = [el.strip().lower() for el in line.split("__eou__") if el.strip() != ""]
             ls[idx] = line
     return ls
 
