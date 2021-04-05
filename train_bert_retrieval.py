@@ -49,13 +49,13 @@ def main(args):
 
     train_dataset, valid_dataset = (
         NSPDataset(
-            args.data_path.format(args.num_neg, "train"),
+            args.data_path.format("train"),  # (args.num_neg, "train"),
             128,
             tokenizer,
             num_neg=args.num_neg,
         ),
         NSPDataset(
-            args.data_path.format(args.num_neg, "valid"),
+            args.data_path.format("valid"),  # (args.num_neg, "valid"),
             128,
             tokenizer,
             num_neg=args.num_neg,
@@ -87,7 +87,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--exp_name",
         type=str,
-        default="random_neg2",  # "k5_maxchange0.4_minchange0.1_NSPCUT0.4",  # "random_neg1",
+        default="random_negsame",  # "k5_maxchange0.4_minchange0.1_NSPCUT0.4",  # "random_neg1",
     )
     parser.add_argument("--num_neg", type=int, default=2)
     parser.add_argument("--log_path", type=str, default="logs_wo_ttype")
@@ -97,7 +97,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--data_path",
         type=str,
-        default="./data/negative/random_neg{}_{}.txt",  # "./attack/neg{}_{}_k5_maxchange0.4_minchange0.1_NSPCUT0.4.txt",  # "./data/negative/random_neg{}_{}.txt",  #
+        default=#"./data/negative/random_negsame_{}.txt",  # "./attack/neg{}_{}_k5_maxchange0.4_minchange0.1_NSPCUT0.4.txt",  # "./data/negative/random_neg{}_{}.txt",  #
     )
 
     args = parser.parse_args()

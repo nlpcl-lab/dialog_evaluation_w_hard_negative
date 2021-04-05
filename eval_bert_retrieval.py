@@ -31,8 +31,11 @@ from datasets import TURN_TOKEN, NSPDataset, EvalDataset
 def main():
     EXP_NAME = (
         "./logs_wo_ttype/k5_maxchange0.4_minchange0.1_NSPCUT0.4/model/epoch-0.pth"
-        # "./logs_wo_ttype/random_neg1/model/epoch-1.pth"
+        # "./logs_wo_ttype/random_negsame/model/epoch-1.pth"
+        # "./logs_wo_ttype/random_neg1/model/epoch-0.pth"
     )
+    datasetname = "dd"
+    modelname = "ours"
     set_random_seed(42)
     logger = get_logger()
 
@@ -49,14 +52,12 @@ def main():
     model.to(device)
 
     dataset_for_correlation = EvalDataset(
-        get_zhao_dataset("dd"),
+        get_zhao_dataset(datasetname),
         128,
         tokenizer,
     )
     model.eval()
-    result = eval_by_NSP(
-        dataset_for_correlation, model, device, is_rank=False
-    )
+    result = eval_by_NSP(dataset_for_correlation, model, device, is_rank=False)
     human_score_list = []
     nsp_list = []
 
@@ -68,6 +69,12 @@ def main():
     print()
     print(EXP_NAME)
     print(correlation)
+    import json
+
+    with open("./baselines/{}_{}.jsonl".format(modelname, datasetname), "w") as f:
+        for idx in range(len(human_score_list)):
+            json.dump({"score": str(human_score_list[idx]), "nsp": str(nsp_list[idx])}, f)
+            f.write("\n")
 
 
 if __name__ == "__main__":
