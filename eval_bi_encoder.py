@@ -1,22 +1,18 @@
-import torch
-from torch.utils.data import Dataset, DataLoader, RandomSampler
-from transformers import BertTokenizer, BertModel, BertConfig
-from utils import (
-    set_random_seed,
-    dump_config,
-    save_model,
-    load_model,
-    write_summary,
-    get_correlation,
-)
-from get_dataset import get_dd_corpus, get_zhao_dataset
 import argparse
 import os
-from torch.optim.adamw import AdamW
-from tensorboardX import SummaryWriter
-from tqdm import tqdm
+
 import numpy as np
+import torch
 from numpy import linalg
+from tensorboardX import SummaryWriter
+from torch.optim.adamw import AdamW
+from torch.utils.data import DataLoader, Dataset, RandomSampler
+from tqdm import tqdm
+from transformers import BertConfig, BertModel, BertTokenizer
+
+from get_dataset import get_dd_corpus, get_zhao_dataset
+from utils import (dump_config, get_correlation, load_model, save_model,
+                   set_random_seed, write_summary)
 
 TURN_TOKEN = "[SEPT]"
 
@@ -81,26 +77,16 @@ def main(args):
             )["pooler_output"]
 
             ctx_hyp_score = (
-                torch.matmul(ctx_encoded, hyp_encoded.T)[0][0]
-                .cpu()
-                .detach()
-                .numpy()
+                torch.matmul(ctx_encoded, hyp_encoded.T)[0][0].cpu().detach().numpy()
             )
             ref_hyp_score = (
-                torch.matmul(ref_encoded, hyp_encoded.T)[0][0]
-                .cpu()
-                .detach()
-                .numpy()
+                torch.matmul(ref_encoded, hyp_encoded.T)[0][0].cpu().detach().numpy()
             )
         refdistance.append(
-            linalg.norm(
-                (ref_encoded - hyp_encoded).cpu().detach().numpy(), ord=2
-            )
+            linalg.norm((ref_encoded - hyp_encoded).cpu().detach().numpy(), ord=2)
         )
         ctxdistance.append(
-            linalg.norm(
-                (ctx_encoded - hyp_encoded).cpu().detach().numpy(), ord=2
-            )
+            linalg.norm((ctx_encoded - hyp_encoded).cpu().detach().numpy(), ord=2)
         )
         humanscore.append(score)
         refscore.append(float(ref_hyp_score))

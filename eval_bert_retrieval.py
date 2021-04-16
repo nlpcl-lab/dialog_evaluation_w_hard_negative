@@ -6,26 +6,14 @@ from tensorboardX import SummaryWriter
 from torch.optim.adamw import AdamW
 from torch.utils.data import DataLoader, Dataset, RandomSampler
 from tqdm import tqdm
-from transformers import (
-    BertConfig,
-    BertForNextSentencePrediction,
-    BertTokenizer,
-)
+from transformers import (BertConfig, BertForNextSentencePrediction,
+                          BertTokenizer)
 
+from datasets import TURN_TOKEN, EvalDataset, NSPDataset
 from get_dataset import get_dd_corpus, get_zhao_dataset
 from trainer import Trainer
-from utils import (
-    dump_config,
-    get_logger,
-    load_model,
-    save_model,
-    eval_by_NSP,
-    set_random_seed,
-    get_correlation,
-    write_summary,
-)
-
-from datasets import TURN_TOKEN, NSPDataset, EvalDataset
+from utils import (dump_config, eval_by_NSP, get_correlation, get_logger,
+                   load_model, save_model, set_random_seed, write_summary)
 
 
 def main():
@@ -73,7 +61,9 @@ def main():
 
     with open("./baselines/{}_{}.jsonl".format(modelname, datasetname), "w") as f:
         for idx in range(len(human_score_list)):
-            json.dump({"score": str(human_score_list[idx]), "nsp": str(nsp_list[idx])}, f)
+            json.dump(
+                {"score": str(human_score_list[idx]), "nsp": str(nsp_list[idx])}, f
+            )
             f.write("\n")
 
 

@@ -1,23 +1,20 @@
 """
 Context ||| Golden ||| Negative(random)이 있는 txt 파일을 만듬.
 """
-import torch
-from torch.utils.data import Dataset, DataLoader, RandomSampler
-from transformers import BertTokenizer, BertModel, BertConfig
-from utils import (
-    set_random_seed,
-    dump_config,
-    save_model,
-    load_model,
-    write_summary,
-)
-from get_dataset import get_dd_corpus
 import argparse
 import os
-from torch.optim.adamw import AdamW
-from tensorboardX import SummaryWriter
-from tqdm import tqdm
 import random
+
+import torch
+from tensorboardX import SummaryWriter
+from torch.optim.adamw import AdamW
+from torch.utils.data import DataLoader, Dataset, RandomSampler
+from tqdm import tqdm
+from transformers import BertConfig, BertModel, BertTokenizer
+
+from get_dataset import get_dd_corpus
+from utils import (dump_config, load_model, save_model, set_random_seed,
+                   write_summary)
 
 TURN_TOKEN = "[SEPT]"
 
@@ -39,9 +36,7 @@ def make_annotated_dataset(raw_zhao_data, tokenizer):
 def main():
     set_random_seed(42)
     NEGNUM = 2
-    raw_dd_train, raw_dd_valid = get_dd_corpus("train"), get_dd_corpus(
-        "validation"
-    )
+    raw_dd_train, raw_dd_valid = get_dd_corpus("train"), get_dd_corpus("validation")
 
     for idx, dataset in enumerate([raw_dd_valid, raw_dd_train]):
         setname = "valid" if idx == 0 else "train"

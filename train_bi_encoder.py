@@ -1,19 +1,16 @@
-import torch
-from torch.utils.data import Dataset, DataLoader, RandomSampler
-from transformers import BertTokenizer, BertModel, BertConfig
-from utils import (
-    set_random_seed,
-    dump_config,
-    save_model,
-    load_model,
-    write_summary,
-)
-from get_dataset import get_dd_corpus
 import argparse
 import os
-from torch.optim.adamw import AdamW
+
+import torch
 from tensorboardX import SummaryWriter
+from torch.optim.adamw import AdamW
+from torch.utils.data import DataLoader, Dataset, RandomSampler
 from tqdm import tqdm
+from transformers import BertConfig, BertModel, BertTokenizer
+
+from get_dataset import get_dd_corpus
+from utils import (dump_config, load_model, save_model, set_random_seed,
+                   write_summary)
 
 TURN_TOKEN = "[SEPT]"
 
@@ -31,24 +28,20 @@ class NSPDataset(Dataset):
         return tuple([el[idx] for el in self.feature])
 
     def _make_feature(self, raw_data):
-        ctx_inp_ids, ctx_masks, res_inp_ids, res_masks = [
-            [] for _ in range(4)
-        ]
+        ctx_inp_ids, ctx_masks, res_inp_ids, res_masks = [[] for _ in range(4)]
 
         for item_idx, item in enumerate(raw_data):
             if item_idx % 100 == 0:
                 print(f"{item_idx}/{len(raw_data)}")
-            assert isinstance(item, list) and all(
-                [isinstance(el, str) for el in item]
-            )
-            
+            assert isinstance(item, list) and all([isinstance(el, str) for el in item])
+
             if len(item) > 6:
                 item = item[:6]
-            
+
             for uttr_idx in range(len(item) - 1):
                 uttrs = item[: uttr_idx + 2]
-                assert len(uttrs)<=6
-                
+                assert len(uttrs) <= 6
+
                 context, response = TURN_TOKEN.join(uttrs[:-1]), uttrs[-1]
 
                 context = self.tokenizer(
@@ -110,9 +103,7 @@ def main(args):
     context_encoder.to(device)
     response_encoder.to(device)
 
-    raw_dd_train, raw_dd_valid = get_dd_corpus("train"), get_dd_corpus(
-        "validation"
-    )
+    raw_dd_train, raw_dd_valid = get_dd_corpus("train"), get_dd_corpus("validation")
     train_dataset, valid_dataset = (
         NSPDataset(raw_dd_train, 128, tokenizer),
         NSPDataset(raw_dd_valid, 128, tokenizer),
@@ -124,13 +115,10 @@ def main(args):
         batch_size=args.batch_size,
         drop_last=True,
     )
-    validloader = DataLoader(
-        valid_dataset, batch_size=args.batch_size, drop_last=True
-    )
+    validloader = DataLoader(valid_dataset, batch_size=args.batch_size, drop_last=True)
 
     optimizer = AdamW(
-        list(context_encoder.parameters())
-        + list(response_encoder.parameters()),
+        list(context_encoder.parameters()) + list(response_encoder.parameters()),
         lr=args.lr,
     )
 
@@ -147,16 +135,14 @@ def main(args):
         response_encoder.train()
         for step, batch in enumerate(tqdm(trainloader)):
             global_step += 1
-            ctx_ids, ctx_mask, res_ids, res_mask = [
-                el.to(device) for el in batch
-            ]
+            ctx_ids, ctx_mask, res_ids, res_mask = [el.to(device) for el in batch]
 
-            ctx_encoded = context_encoder(
-                ctx_ids, ctx_mask, return_dict=True
-            )["pooler_output"]
-            res_encoded = response_encoder(
-                res_ids, res_mask, return_dict=True
-            )["pooler_output"]
+            ctx_encoded = context_encoder(ctx_ids, ctx_mask, return_dict=True)[
+                "pooler_output"
+            ]
+            res_encoded = response_encoder(res_ids, res_mask, return_dict=True)[
+                "pooler_output"
+            ]
             output = torch.matmul(ctx_encoded, res_encoded.T)
             response_select_loss = criteria(output, label)
             context_select_loss = criteria(
@@ -192,9 +178,7 @@ def main(args):
                 "train",
                 global_step,
             )
-            write_summary(
-                writer, {"context_l2": context_l2_loss}, "train", global_step
-            )
+            write_summary(writer, {"context_l2": context_l2_loss}, "train", global_step)
             write_summary(
                 writer,
                 {"response_l2": response_l2_loss},
@@ -209,21 +193,17 @@ def main(args):
         with torch.no_grad():
             loss_list = []
             for step, batch in enumerate(tqdm(validloader)):
-                ctx_ids, ctx_mask, res_ids, res_mask = [
-                    el.to(device) for el in batch
-                ]
+                ctx_ids, ctx_mask, res_ids, res_mask = [el.to(device) for el in batch]
 
-                ctx_encoded = context_encoder(
-                    ctx_ids, ctx_mask, return_dict=True
-                )["pooler_output"]
-                res_encoded = response_encoder(
-                    res_ids, res_mask, return_dict=True
-                )["pooler_output"]
+                ctx_encoded = context_encoder(ctx_ids, ctx_mask, return_dict=True)[
+                    "pooler_output"
+                ]
+                res_encoded = response_encoder(res_ids, res_mask, return_dict=True)[
+                    "pooler_output"
+                ]
                 output = torch.matmul(ctx_encoded, res_encoded.T)
                 response_loss = criteria(output, label)
-                context_loss = criteria(
-                    torch.matmul(res_encoded, ctx_encoded.T), label
-                )
+                context_loss = criteria(torch.matmul(res_encoded, ctx_encoded.T), label)
                 loss = response_loss + context_loss
                 loss_list.append(loss.cpu().detach().numpy())
             final_loss = sum(loss_list) / len(loss_list)

@@ -2,30 +2,19 @@ import argparse
 import os
 
 import torch
-from torch import nn
 from tensorboardX import SummaryWriter
+from torch import nn
 from torch.optim.adamw import AdamW
 from torch.utils.data import DataLoader, Dataset, RandomSampler
 from tqdm import tqdm
-from transformers import (
-    BertConfig,
-    BertModel,
-    BertTokenizer,
-)
+from transformers import BertConfig, BertModel, BertTokenizer
 
 from bert_rank_model import BertRankModel
+from datasets import TURN_TOKEN, EvalDataset, NSPDataset
 from get_dataset import get_dd_corpus, get_zhao_dataset
 from trainer import Trainer
-from utils import (
-    dump_config,
-    get_logger,
-    load_model,
-    save_model,
-    set_random_seed,
-    write_summary,
-)
-
-from datasets import TURN_TOKEN, NSPDataset, EvalDataset
+from utils import (dump_config, get_logger, load_model, save_model,
+                   set_random_seed, write_summary)
 
 
 def main(args):
@@ -69,9 +58,7 @@ def main(args):
         batch_size=args.batch_size,
         drop_last=True,
     )
-    validloader = DataLoader(
-        valid_dataset, batch_size=args.batch_size, drop_last=True
-    )
+    validloader = DataLoader(valid_dataset, batch_size=args.batch_size, drop_last=True)
 
     trainer = Trainer(
         args,
@@ -103,9 +90,8 @@ if __name__ == "__main__":
         "--data_path",
         type=str,
         # "./data/negative/neg{}_{}_k5_maxchange0.5_nspoveronly0.3_scorediff0.01",  # "./data/negative/neg{}_{}_k1_maxchange1.0_nspover0.3_scorediff0.05.txt",  # "./data/negative/neg{}_{}_pred5_numtokenratio0.5_nspthreshold0.3_scorediff0.01.txt",  # "./data/negative/del_prev_turn-topk100_neg{}_{}.txt",  # "./data/negative/prefix-topk100_neg{}_{}.txt",
-
         # './data/negative/random_neg{}_{}.txt',
-        default="./data/negative/neg{}_{}_k1_maxchange0.5_minchange0.15_nspoveronly0.3.txt"
+        default="./data/negative/neg{}_{}_k1_maxchange0.5_minchange0.15_nspoveronly0.3.txt",
     )
 
     args = parser.parse_args()

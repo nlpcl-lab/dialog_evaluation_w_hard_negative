@@ -1,8 +1,8 @@
 import torch
 from torch.utils.data import DataLoader, Dataset, RandomSampler
-from utils import read_raw_file
 from tqdm import tqdm
 
+from utils import read_raw_file
 
 TURN_TOKEN = "[SEPT]"
 
@@ -27,9 +27,7 @@ class NSPDataset(Dataset):
             self.feature = self._make_feature(self.raw_data)
         else:
             setname = "train" if "train" in self.fname else "valid"
-            self.rand2_fname = "./data/negative/random_neg2_{}.txt".format(
-                setname
-            )
+            self.rand2_fname = "./data/negative/random_neg2_{}.txt".format(setname)
             self.random_neg2_dataset = self.read_dataset(self.rand2_fname)
             self.feature = self._make_feature_for_rank_loss(self.raw_data)
 
@@ -130,15 +128,14 @@ class NSPDataset(Dataset):
 
     def read_dataset(self, fname):
         raw = read_raw_file(fname)
+        removed = [el for el in raw if len(el) != self.num_neg + 2]
+        for el in removed:
+            raw.remove(el)
         assert all([len(el) == self.num_neg + 2 for el in raw])
         return raw
 
     def __len__(self):
-        assert (
-            len(self.feature[0])
-            == len(self.feature[1])
-            == len(self.feature[2])
-        )
+        assert len(self.feature[0]) == len(self.feature[1]) == len(self.feature[2])
         return len(self.feature[0])
 
     def __getitem__(self, idx):
@@ -201,9 +198,7 @@ class NSPDataset(Dataset):
 
 
 class EvalDataset:
-    def __init__(
-        self, dataset, max_seq_len: int, tokenizer, rank_loss: bool = False
-    ):
+    def __init__(self, dataset, max_seq_len: int, tokenizer, rank_loss: bool = False):
         self.max_seq_len = max_seq_len
         self.tokenizer = tokenizer
         if rank_loss:

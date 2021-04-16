@@ -1,12 +1,12 @@
-from transformers import GPT2Tokenizer, GPT2LMHeadModel
-
-import os
-from utils import get_logger, set_random_seed
-import torch
-from functools import partial
-from tqdm import tqdm
-
 import argparse
+import os
+from functools import partial
+
+import torch
+from tqdm import tqdm
+from transformers import GPT2LMHeadModel, GPT2Tokenizer
+
+from utils import get_logger, set_random_seed
 
 
 def main(args):
@@ -32,9 +32,7 @@ def main(args):
     for setname in ["valid", "train"]:
         random_fname = args.random_fname.format(setname)
         if setname == "train":
-            args.output_fname = args.output_fname.replace(
-                "valid.txt", "train.txt"
-            )
+            args.output_fname = args.output_fname.replace("valid.txt", "train.txt")
         with open(random_fname, "r") as f:
             ls = [el.strip().split("|||") for el in f.readlines()]
             assert all([len(el) == 3 for el in ls])
@@ -49,9 +47,7 @@ def main(args):
                     truncation=True,
                     padding=False,
                 )["input_ids"]
-                prefix_count = int(
-                    args.prefix_ratio * (len(tokenized_golden[0]) - 1)
-                )
+                prefix_count = int(args.prefix_ratio * (len(tokenized_golden[0]) - 1))
                 if prefix_count <= 3:
                     generated = "[NONE]"
                     ls[line_idx].append(generated)

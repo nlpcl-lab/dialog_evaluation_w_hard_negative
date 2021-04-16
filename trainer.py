@@ -144,21 +144,15 @@ class Trainer:
                     golden_score = self.model(
                         ctx_ids, ctx_mask, golden_ids, golden_mask
                     )
-                    neg1_score = self.model(
-                        ctx_ids, ctx_mask, neg1_ids, neg1_mask
-                    )
+                    neg1_score = self.model(ctx_ids, ctx_mask, neg1_ids, neg1_mask)
                     if self.config.num_neg == 2:
-                        neg2_score = self.model(
-                            ctx_ids, ctx_mask, neg2_ids, neg2_mask
-                        )
-                    prediction = torch.cat(
-                        [golden_score, neg1_score, neg2_score], 1
-                    )
+                        neg2_score = self.model(ctx_ids, ctx_mask, neg2_ids, neg2_mask)
+                    prediction = torch.cat([golden_score, neg1_score, neg2_score], 1)
                     loss = self.crossentropy(
                         prediction,
-                        torch.zeros(
-                            self.config.batch_size, dtype=torch.long
-                        ).to(self.device),
+                        torch.zeros(self.config.batch_size, dtype=torch.long).to(
+                            self.device
+                        ),
                     )
                 else:
                     ids, token_type, attn, label = batch
@@ -199,22 +193,16 @@ class Trainer:
                     neg2_mask,
                 ) = batch
             # shape of [batch_size, 1]
-            golden_score = self.model(
-                ctx_ids, ctx_mask, golden_ids, golden_mask
-            )
+            golden_score = self.model(ctx_ids, ctx_mask, golden_ids, golden_mask)
             neg1_score = self.model(ctx_ids, ctx_mask, neg1_ids, neg1_mask)
             if self.config.num_neg == 2:
-                neg2_score = self.model(
-                    ctx_ids, ctx_mask, neg2_ids, neg2_mask
-                )
+                neg2_score = self.model(ctx_ids, ctx_mask, neg2_ids, neg2_mask)
 
             prediction = torch.cat([golden_score, neg1_score, neg2_score], 1)
 
             loss = self.crossentropy(
                 prediction,
-                torch.zeros(self.config.batch_size, dtype=torch.long).to(
-                    self.device
-                ),
+                torch.zeros(self.config.batch_size, dtype=torch.long).to(self.device),
             )
         else:
             ids, token_type, attn, label = batch
@@ -232,9 +220,7 @@ class Trainer:
         self.optimizer.zero_grad()
         return loss, perf
 
-    def _write_summary(
-        self, values: Dict[str, torch.Tensor], setname: str, step: int
-    ):
+    def _write_summary(self, values: Dict[str, torch.Tensor], setname: str, step: int):
         for k, v in values.items():
             self.writer.add_scalars(k, {setname: v}, step)
         self.writer.flush()

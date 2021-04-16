@@ -1,6 +1,5 @@
 import os
 
-
 ours_fname = "./attack/neg2_{}_k5_maxchange0.4_minchange0.1_NSPCUT0.4.txt"
 rand2_fname = "./data/negative/random_neg2_{}.txt"
 output_fname = "./data/negative/random_negsame_{}.txt"

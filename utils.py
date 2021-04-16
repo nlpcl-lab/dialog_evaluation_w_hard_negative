@@ -1,12 +1,12 @@
-import os
 import json
-import torch
-import random
-import numpy as np
-from scipy.stats import pearsonr, spearmanr
-from typing import List
 import logging
+import os
+import random
+from typing import List
 
+import numpy as np
+import torch
+from scipy.stats import pearsonr, spearmanr
 from tqdm import tqdm
 
 
@@ -55,8 +55,6 @@ def get_correlation(human_score: List[float], model_score: List[float]):
     return p[0], s[0]
 
 
-
-
 def eval_by_NSP(dataset, model, device, is_rank: bool = False):
     recorder = []
     softmax = torch.nn.Softmax(dim=1)
@@ -75,9 +73,7 @@ def eval_by_NSP(dataset, model, device, is_rank: bool = False):
             )
             with torch.no_grad():
                 prediction = (
-                    model(ctx_ids, ctx_mask, hyp_ids, hyp_mask)
-                    .cpu()
-                    .numpy()[0][0]
+                    model(ctx_ids, ctx_mask, hyp_ids, hyp_mask).cpu().numpy()[0][0]
                 )
 
         else:
@@ -92,9 +88,7 @@ def eval_by_NSP(dataset, model, device, is_rank: bool = False):
                 #    softmax(model(ids, masks, types)[0]).cpu().numpy()[0][0]
                 # )
                 prediction = softmax(model(ids, masks)[0]).cpu().numpy()[0][0]
-        recorder.append(
-            {"human_score": batch["human_score"], "nsp": prediction}
-        )
+        recorder.append({"human_score": batch["human_score"], "nsp": prediction})
     return recorder
 
 

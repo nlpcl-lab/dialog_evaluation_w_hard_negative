@@ -1,10 +1,10 @@
 import json
 import os
-import wget
 import zipfile
 from typing import List, Union
-from google_drive_downloader import GoogleDriveDownloader as gdd
 
+import wget
+from google_drive_downloader import GoogleDriveDownloader as gdd
 
 DAILYDIALOG_URL = "http://yanran.li/files/ijcnlp_dailydialog.zip"
 annotated_dailydialog_drive_id: str = "1tbSnH20B2SRBeqiZTiW7NKhE_EVL6ktw"
@@ -37,7 +37,8 @@ def get_grade_annotated_dataset(corpus_name: str):
         hyp_fname = os.path.join(text_path, "human_hyp.txt")
 
         scores, ctxs, refs, hyps = [
-            _read_txt_files(fname) for fname in [score_fname, ctx_fname, ref_fname, hyp_fname]
+            _read_txt_files(fname)
+            for fname in [score_fname, ctx_fname, ref_fname, hyp_fname]
         ]
         # assert the same number of samples
         assert len(list(set(list(map(len, [scores, ctxs, refs, hyps]))))) == 1
@@ -138,7 +139,9 @@ def get_dd_corpus(setname):
     with open(fname, "r") as f:
         ls = [el.strip() for el in f.readlines()]
         for idx, line in enumerate(ls):
-            line = [el.strip().lower() for el in line.split("__eou__") if el.strip() != ""]
+            line = [
+                el.strip().lower() for el in line.split("__eou__") if el.strip() != ""
+            ]
             ls[idx] = line
     return ls
 

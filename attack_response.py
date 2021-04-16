@@ -2,23 +2,19 @@
 Experimental code to attack the golden resposne with BERT-retrieval model
 """
 import argparse
-import os
-import numpy as np
-from functools import partial
-from tqdm import tqdm
 import json
+import os
+from functools import partial
+
+import numpy as np
 import torch
-from tqdm import tqdm
-from transformers import (
-    BertConfig,
-    BertForNextSentencePrediction,
-    BertTokenizer,
-    BertForMaskedLM,
-)
 from sklearn.metrics.pairwise import cosine_similarity
+from tqdm import tqdm
+from transformers import (BertConfig, BertForMaskedLM,
+                          BertForNextSentencePrediction, BertTokenizer)
 
 from datasets import TURN_TOKEN, EvalDataset, NSPDataset
-from utils import get_logger, read_raw_file, set_random_seed, get_usencoder
+from utils import get_logger, get_usencoder, read_raw_file, set_random_seed
 
 NUM_TOPK_PREDICTION = 3
 MIN_CHANGE_RATIO = 0.1
@@ -51,7 +47,9 @@ def attack():
 
     bert_mlm_config = BertConfig.from_pretrained("bert-base-uncased")
     bert_mlm = BertForMaskedLM(bert_mlm_config)
-    bert_mlm.load_state_dict(torch.load("./logs/ft_bert/model/epoch-0.pth"), strict=False)
+    bert_mlm.load_state_dict(
+        torch.load("./logs/ft_bert/model/epoch-0.pth"), strict=False
+    )
     bert_mlm.to(device)
 
     """
@@ -89,7 +87,13 @@ def attack():
                 counter["error"] += 1
                 result.append("[NONE]")
                 continue
-            (context, response, tokenized_response, original_score, vurnerable_score,) = (
+            (
+                context,
+                response,
+                tokenized_response,
+                original_score,
+                vurnerable_score,
+            ) = (
                 item["context"],
                 item["response"],
                 item["tokenized_response"],
@@ -114,7 +118,9 @@ def attack():
 
             response_length = int(sum(original_encoded["token_type_ids"][0]))
             assert response_length == len(tokenized_response) + 1
-            context_length = int(sum(original_encoded["attention_mask"][0])) - response_length
+            context_length = (
+                int(sum(original_encoded["attention_mask"][0])) - response_length
+            )
             if response_length <= 6:
                 counter["length"] += 1
                 result.append("[NONE]")
@@ -143,12 +149,16 @@ def attack():
                 if changed_counter / len(sorted_score_diff_list) > MAX_CHANGE_RATIO:
                     break
 
-                original_token_id = tokenizer._convert_token_to_id(attacked_response[token_index])
+                original_token_id = tokenizer._convert_token_to_id(
+                    attacked_response[token_index]
+                )
                 attacked_response[token_index] = tokenizer.mask_token
                 model_input = torch.tensor(
                     [
                         tokenizer.convert_tokens_to_ids(
-                            [tokenizer.cls_token] + attacked_response + [tokenizer.sep_token]
+                            [tokenizer.cls_token]
+                            + attacked_response
+                            + [tokenizer.sep_token]
                         )
                     ]
                 ).to(device)
@@ -157,7 +167,9 @@ def attack():
 
                 score_in_response = softmax(output[0][token_index + 1]).cpu().detach()
                 score_in_response[original_token_id] = 0.0
-                sorted_idx = torch.argsort(score_in_response, descending=True)[:NUM_TOPK_PREDICTION]
+                sorted_idx = torch.argsort(score_in_response, descending=True)[
+                    :NUM_TOPK_PREDICTION
+                ]
 
                 if not USE_USE:
                     lowest_token, lowest_score = None, 100
@@ -173,10 +185,12 @@ def attack():
                     unsimilar_token, unsimilar_score = None, 100
                     for likely_token in sorted_idx:
                         tmp_attacked_response = attacked_response[:]
-                        tmp_attacked_response[token_index] = tokenizer.convert_ids_to_tokens(
-                            [likely_token]
+                        tmp_attacked_response[
+                            token_index
+                        ] = tokenizer.convert_ids_to_tokens([likely_token])[0]
+                        attacked_emb = use(
+                            [" ".join(tmp_attacked_response).replace(" ##", "")]
                         )[0]
-                        attacked_emb = use([" ".join(tmp_attacked_response).replace(" ##", "")])[0]
                         cossim = cosine_similarity([original_emb], [attacked_emb])[0][0]
                         if cossim < unsimilar_score:
                             unsimilar_score = cossim
@@ -199,7 +213,9 @@ def attack():
                 Change
                 """
                 input_ids[0, context_length + token_index] = lowest_token
-                attacked_response[token_index] = tokenizer.convert_ids_to_tokens([lowest_token])[0]
+                attacked_response[token_index] = tokenizer.convert_ids_to_tokens(
+                    [lowest_token]
+                )[0]
                 changed_counter += 1
 
                 """
@@ -295,9 +311,13 @@ def scoring():
                 result.append(item)
                 continue
 
-            context_length = int(sum(original_encoded["attention_mask"][0])) - response_length
+            context_length = (
+                int(sum(original_encoded["attention_mask"][0])) - response_length
+            )
             score_per_position = []
-            for response_token_index in range(response_length - 1):  # To avoid [SEP] masking
+            for response_token_index in range(
+                response_length - 1
+            ):  # To avoid [SEP] masking
                 mask_position = response_token_index + context_length
                 attacked_ids = original_encoded["input_ids"][0]
                 attacked_ids = np.concatenate(
@@ -313,13 +333,23 @@ def scoring():
                         [
                             [0 for _ in range(context_length)]
                             + [1 for _ in range(response_length - 1)]
-                            + [0 for _ in range(128 - context_length - response_length + 1)]
+                            + [
+                                0
+                                for _ in range(
+                                    128 - context_length - response_length + 1
+                                )
+                            ]
                         ]
                     ),
                     "attention_mask": torch.tensor(
                         [
                             [1 for _ in range(context_length + response_length - 1)]
-                            + [0 for i in range(128 - context_length - response_length + 1)]
+                            + [
+                                0
+                                for i in range(
+                                    128 - context_length - response_length + 1
+                                )
+                            ]
                         ]
                     ),
                 }

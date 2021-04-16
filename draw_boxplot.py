@@ -1,7 +1,5 @@
-import os
-import json
-
 import argparse
+import json
 import os
 
 import torch
@@ -9,26 +7,14 @@ from tensorboardX import SummaryWriter
 from torch.optim.adamw import AdamW
 from torch.utils.data import DataLoader, Dataset, RandomSampler
 from tqdm import tqdm
-from transformers import (
-    BertConfig,
-    BertForNextSentencePrediction,
-    BertTokenizer,
-)
+from transformers import (BertConfig, BertForNextSentencePrediction,
+                          BertTokenizer)
 
+from datasets import TURN_TOKEN, EvalDataset, NSPDataset
 from get_dataset import get_dd_corpus, get_zhao_dataset
 from trainer import Trainer
-from utils import (
-    dump_config,
-    get_logger,
-    load_model,
-    save_model,
-    eval_by_NSP,
-    set_random_seed,
-    get_correlation,
-    write_summary,
-)
-
-from datasets import TURN_TOKEN, NSPDataset, EvalDataset
+from utils import (dump_config, eval_by_NSP, get_correlation, get_logger,
+                   load_model, save_model, set_random_seed, write_summary)
 
 
 def scoring_main():
@@ -65,7 +51,10 @@ def scoring_main():
         with torch.no_grad():
             prediction = (
                 softmax(
-                    model(encoded["input_ids"].to(device), encoded["attention_mask"].to(device))[0]
+                    model(
+                        encoded["input_ids"].to(device),
+                        encoded["attention_mask"].to(device),
+                    )[0]
                 )
                 .cpu()
                 .numpy()[0][0]
@@ -83,7 +72,10 @@ def scoring_main():
         with torch.no_grad():
             prediction = (
                 softmax(
-                    model(encoded["input_ids"].to(device), encoded["attention_mask"].to(device))[0]
+                    model(
+                        encoded["input_ids"].to(device),
+                        encoded["attention_mask"].to(device),
+                    )[0]
                 )
                 .cpu()
                 .numpy()[0][0]
@@ -102,7 +94,10 @@ def scoring_main():
         with torch.no_grad():
             prediction = (
                 softmax(
-                    model(encoded["input_ids"].to(device), encoded["attention_mask"].to(device))[0]
+                    model(
+                        encoded["input_ids"].to(device),
+                        encoded["attention_mask"].to(device),
+                    )[0]
                 )
                 .cpu()
                 .numpy()[0][0]

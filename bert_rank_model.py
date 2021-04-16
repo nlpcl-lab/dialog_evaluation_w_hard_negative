@@ -1,5 +1,5 @@
-from torch import nn
 import torch
+from torch import nn
 
 
 class BertRankModel(torch.nn.Module):
@@ -14,7 +14,8 @@ class BertRankModel(torch.nn.Module):
         self.M = nn.Parameter(
             torch.FloatTensor(
                 self.bert_config.hidden_size, self.bert_config.hidden_size
-            ), requires_grad=True
+            ),
+            requires_grad=True,
         )
         self.prediction_layer = nn.Sequential(
             nn.Dropout(0.3),
@@ -25,13 +26,14 @@ class BertRankModel(torch.nn.Module):
             nn.ReLU(),
             nn.Dropout(0.3),
             nn.Linear(self.bert_config.hidden_size, 1),
-            nn.Tanh()
+            nn.Tanh(),
         )
 
         def init_weights(m):
             if type(m) == nn.Linear:
                 torch.nn.init.xavier_uniform(m.weight)
                 m.bias.data.fill_(0.01)
+
         self.prediction_layer.apply(init_weights)
 
     def forward(self, context_ids, context_mask, response_ids, response_mask):
@@ -46,9 +48,7 @@ class BertRankModel(torch.nn.Module):
             context_mask.unsqueeze(-1).expand(context_outputs.size()).float()
         )
         expanded_response_mask = (
-            response_mask.unsqueeze(-1)
-            .expand(response_outputs.size())
-            .float()
+            response_mask.unsqueeze(-1).expand(response_outputs.size()).float()
         )
         pooled_context = torch.sum(
             context_outputs * expanded_context_mask, 1
@@ -58,12 +58,7 @@ class BertRankModel(torch.nn.Module):
         ) / torch.clamp(expanded_response_mask.sum(1), min=1e-9)
 
         context_response_dot = (
-            (
-                torch.matmul(pooled_context, self.M)
-                * pooled_response
-            )
-            .sum(1)
-            .view(-1, 1)
+            (torch.matmul(pooled_context, self.M) * pooled_response).sum(1).view(-1, 1)
         )
 
         response_concat = torch.cat(
