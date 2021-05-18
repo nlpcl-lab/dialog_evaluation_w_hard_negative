@@ -6,14 +6,12 @@ from tensorboardX import SummaryWriter
 from torch.optim.adamw import AdamW
 from torch.utils.data import DataLoader, Dataset, RandomSampler
 from tqdm import tqdm
-from transformers import (BertConfig, BertForNextSentencePrediction,
-                          BertTokenizer)
+from transformers import BertConfig, BertForNextSentencePrediction, BertTokenizer
 
 from datasets import TURN_TOKEN, EvalDataset, NSPDataset
 from get_dataset import get_dd_corpus, get_zhao_dataset
 from trainer import Trainer
-from utils import (dump_config, get_logger, load_model, save_model,
-                   set_random_seed, write_summary)
+from utils import dump_config, get_logger, load_model, save_model, set_random_seed, write_summary
 
 
 def main(args):
@@ -39,13 +37,13 @@ def main(args):
 
     train_dataset, valid_dataset = (
         NSPDataset(
-            args.data_path.format(args.num_neg, "train"),
+            args.data_path.format("train"),  # (args.num_neg, "train"),
             128,
             tokenizer,
             num_neg=args.num_neg,
         ),
         NSPDataset(
-            args.data_path.format(args.num_neg, "valid"),
+            args.data_path.format("valid"),  # (args.num_neg, "valid"),
             128,
             tokenizer,
             num_neg=args.num_neg,
@@ -77,7 +75,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--exp_name",
         type=str,
-        default="bart-beam5",  # "k5_maxchange0.4_minchange0.1_NSPCUT0.4",  # "random_neg1",
+        default="bart-mask0.5_topp0.95",  # "k5_maxchange0.4_minchange0.1_NSPCUT0.4",  # "random_neg1",
     )
     parser.add_argument("--num_neg", type=int, default=2)
     parser.add_argument("--log_path", type=str, default="logs_wo_ttype")
@@ -87,7 +85,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--data_path",
         type=str,
-        default="./data/negative/neg{}_bart_beam5_{}.txt",  # "./attack/neg{}_{}_k5_maxchange0.4_minchange0.1_NSPCUT0.4.txt",  # "./data/negative/random_neg{}_{}.txt",  #
+        default="./data/negative/bart_mask0.5_topp0.95_{}_usesim0.3-0.9.txt",
     )
 
     args = parser.parse_args()

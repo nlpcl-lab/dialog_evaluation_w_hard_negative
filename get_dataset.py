@@ -37,8 +37,7 @@ def get_grade_annotated_dataset(corpus_name: str):
         hyp_fname = os.path.join(text_path, "human_hyp.txt")
 
         scores, ctxs, refs, hyps = [
-            _read_txt_files(fname)
-            for fname in [score_fname, ctx_fname, ref_fname, hyp_fname]
+            _read_txt_files(fname) for fname in [score_fname, ctx_fname, ref_fname, hyp_fname]
         ]
         # assert the same number of samples
         assert len(list(set(list(map(len, [scores, ctxs, refs, hyps]))))) == 1
@@ -139,9 +138,21 @@ def get_dd_corpus(setname):
     with open(fname, "r") as f:
         ls = [el.strip() for el in f.readlines()]
         for idx, line in enumerate(ls):
-            line = [
-                el.strip().lower() for el in line.split("__eou__") if el.strip() != ""
-            ]
+            line = [el.strip().lower() for el in line.split("__eou__") if el.strip() != ""]
+            ls[idx] = line
+    return ls
+
+
+def get_persona_corpus(setname):
+    assert setname in ["train", "validation", "test"]
+    if setname =='validation':
+        setname = 'valid'
+    fname = "./data/persona/persona_{}.txt".format(setname)
+    assert os.path.exists(fname)
+    with open(fname, "r") as f:
+        ls = [el.strip() for el in f.readlines()]
+        for idx, line in enumerate(ls):
+            line = [el.strip().lower() for el in line.split("__eou__") if el.strip() != ""]
             ls[idx] = line
     return ls
 

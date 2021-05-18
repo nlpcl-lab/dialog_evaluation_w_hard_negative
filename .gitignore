@@ -1,3 +1,5 @@
+excel_result/
+ours_data/
 .ipynb_checkpoints/
 *.jsonl
 env/
