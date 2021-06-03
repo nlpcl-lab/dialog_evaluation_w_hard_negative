@@ -1,10 +1,198 @@
 import torch
 from torch.utils.data import DataLoader, Dataset, RandomSampler
 from tqdm import tqdm
+import numpy as np
+
 
 from utils import read_raw_file
+from graph_preprocess import *
 
 TURN_TOKEN = "[SEPT]"
+
+
+class GraphNSPDataset(Dataset):
+    def __init__(self, fname, max_seq_len: int, tokenizer, cpnet, c2i, i2c, w2v, max_keyword_num):
+        self.max_keyword_num = max_keyword_num
+        self.max_seq_len = max_seq_len
+        self.tokenizer = tokenizer
+        self.fname = fname
+        self.cpnet = cpnet
+        self.c2i = c2i
+        self.i2c = i2c
+        self.raw_data = self.read_dataset(fname)
+        self.feature = self._make_feature(self.raw_data)
+
+    def read_dataset(self, fname):
+        raw = read_raw_file(fname)
+        assert all([len(el) == 3 for el in raw])
+        return raw
+
+    def __len__(self):
+        assert len(self.feature[0]) == len(self.feature[1]) == len(self.feature[2])
+        return len(self.feature[0])
+
+    def __getitem__(self, idx):
+        return tuple([el[idx] for el in self.feature])
+
+    def _make_feature(self, raw_data):
+        ids, masks, types, labels = [], [], [], []
+        keyword_ids, adj_matrix = [], []
+
+        for item_idx, item in enumerate(tqdm(raw_data)):
+            if item_idx == 100:
+                break
+            context, response, negative1 = item
+            pos_pair_keywords = get_keyword_from_utterance(context + " " + response)
+            neg_pair_keywords = get_keyword_from_utterance(context + " " + negative1)
+
+            positive = self.tokenizer(
+                context,
+                text_pair=response,
+                max_length=128,
+                padding="max_length",
+                truncation=True,
+                return_tensors="pt",
+            )
+            negative1 = self.tokenizer(
+                context,
+                text_pair=negative1,
+                max_length=128,
+                padding="max_length",
+                truncation=True,
+                return_tensors="pt",
+            )
+            ids.extend(positive["input_ids"])
+            types.extend(positive["token_type_ids"])
+            masks.extend(positive["attention_mask"])
+            labels.append(0)
+            ids.extend(negative1["input_ids"])
+            types.extend(negative1["token_type_ids"])
+            masks.extend(negative1["attention_mask"])
+            labels.append(1)
+
+            # Keyword
+            random.shuffle(pos_pair_keywords)
+            random.shuffle(neg_pair_keywords)
+            pos_pair_keywords_ids = [
+                0 if word not in self.c2i else self.c2i[word] for word in pos_pair_keywords
+            ][: self.max_keyword_num]
+            neg_pair_keywords_ids = [
+                0 if word not in self.c2i else self.c2i[word] for word in neg_pair_keywords
+            ][: self.max_keyword_num]
+
+            if len(pos_pair_keywords_ids) < self.max_keyword_num:
+                pos_pair_keywords_ids.extend(
+                    [0] * (self.max_keyword_num - len(pos_pair_keywords_ids))
+                )
+            if len(neg_pair_keywords_ids) < self.max_keyword_num:
+                neg_pair_keywords_ids.extend(
+                    [0] * (self.max_keyword_num - len(neg_pair_keywords_ids))
+                )
+            # Keyword
+            keyword_ids.append(pos_pair_keywords_ids)
+            assert len(keyword_ids[-1]) == self.max_keyword_num
+            keyword_ids.append(neg_pair_keywords_ids)
+            assert len(keyword_ids[-1]) == self.max_keyword_num
+
+            # Adjacent
+            adj = np.zeros((self.max_keyword_num, self.max_keyword_num))
+            for src_idx, src_id in enumerate(pos_pair_keywords_ids):
+                for tgt_idx, tgt_id in enumerate(pos_pair_keywords_ids):
+                    if src_id == 0 or tgt_id == 0:
+                        adj[src_idx][tgt_idx] = -1
+                    elif src_id not in self.cpnet.nodes() or tgt_id not in self.cpnet.nodes():
+                        adj[src_idx][tgt_idx] = -1
+                    else:
+                        adj[src_idx][tgt_idx] = (
+                            nx.shortest_path_length(self.cpnet, source=src_id, target=tgt_id) + 1
+                        )
+            adj_matrix.append(adj)
+            adj = np.zeros((self.max_keyword_num, self.max_keyword_num))
+            for src_idx, src_id in enumerate(neg_pair_keywords_ids):
+                for tgt_idx, tgt_id in enumerate(neg_pair_keywords_ids):
+                    if src_id == 0 or tgt_id == 0:
+                        adj[src_idx][tgt_idx] = -1
+                    elif src_id not in self.cpnet.nodes() or tgt_id not in self.cpnet.nodes():
+                        adj[src_idx][tgt_idx] = -1
+                    else:
+                        adj[src_idx][tgt_idx] = (
+                            nx.shortest_path_length(self.cpnet, source=src_id, target=tgt_id) + 1
+                        )
+            adj_matrix.append(adj)
+
+        return (
+            torch.stack(ids),
+            torch.stack(types),
+            torch.stack(masks),
+            torch.tensor(labels),
+            torch.tensor(keyword_ids),
+            torch.tensor(adj_matrix),
+        )
+
+
+class GraphEvalDataset:
+    def __init__(self, dataset, max_seq_len: int, tokenizer, cpnet, c2i, i2c, w2v, max_keyword_num):
+        self.max_seq_len = max_seq_len
+        self.tokenizer = tokenizer
+        self.cpnet = cpnet
+        self.c2i = c2i
+        self.i2c = i2c
+        self.max_keyword_num = max_keyword_num
+
+        self.feature = self.make_feature(dataset)
+
+    def make_feature(self, raw_zhao_data):
+        """
+        어차피 inference용이니깐 대충 만들어서 돌리기
+        """
+        encoded_list = []
+        for item in raw_zhao_data:
+            keyword_ids = []
+            ctx = TURN_TOKEN.join(item["ctx"])
+            # ref = item["ref"]
+            hyp = item["hyp"]
+            score = item["human_score"]
+            encoded = self.tokenizer(
+                ctx,
+                text_pair=hyp,
+                max_length=128,
+                padding="max_length",
+                truncation=True,
+                return_tensors="pt",
+            )
+            encoded["human_score"] = score
+
+            # Keyword
+            pos_pair_keywords = get_keyword_from_utterance(ctx + " " + hyp)
+            random.shuffle(pos_pair_keywords)
+
+            pos_pair_keywords_ids = [
+                0 if word not in self.c2i else self.c2i[word] for word in pos_pair_keywords
+            ][: self.max_keyword_num]
+
+            if len(pos_pair_keywords_ids) < self.max_keyword_num:
+                pos_pair_keywords_ids.extend(
+                    [0 * (self.max_keyword_num - len(pos_pair_keywords_ids))]
+                )
+            # Keyword
+            keyword_ids.append(pos_pair_keywords_ids)
+            # Adjacent
+            adj = np.zeros((self.max_keyword_num, self.max_keyword_num))
+            for src_idx, src_id in enumerate(pos_pair_keywords_ids):
+                for tgt_idx, tgt_id in enumerate(pos_pair_keywords_ids):
+                    if src_id == 0 or tgt_id == 0:
+                        adj[src_idx][tgt_idx] = -1
+                    elif src_id not in self.cpnet.nodes() or tgt_id not in self.cpnet.nodes():
+                        adj[src_idx][tgt_idx] = -1
+                    else:
+                        adj[src_idx][tgt_idx] = (
+                            nx.shortest_path_length(self.cpnet, source=src_id, target=tgt_id) + 1
+                        )
+
+            encoded["keywords"] = keyword_ids
+            encoded["adj"] = adj
+            encoded_list.append(encoded)
+        return encoded_list
 
 
 class NSPDataset(Dataset):
@@ -53,7 +241,7 @@ class NSPDataset(Dataset):
             negative2_ids, negative2_masks = [], []
 
         for item_idx, item in enumerate(tqdm(raw_data)):
-            if item_idx == 1000:
+            if item_idx == 100:
                 break
             if self.num_neg == 1:
                 context, response, negative1 = item
